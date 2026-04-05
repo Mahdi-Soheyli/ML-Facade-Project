@@ -6,70 +6,180 @@
   <title>E1300 Teaching Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
-    body { font-family: system-ui, sans-serif; margin: 1.5rem; max-width: 1100px; }
-    h1 { font-size: 1.25rem; }
+    :root { --border: #ccc; --bg-h: #f4f4f4; }
+    body { font-family: system-ui, Segoe UI, sans-serif; margin: 1rem 1.5rem 2rem; max-width: 1200px; }
+    h1 { font-size: 1.35rem; }
+    h2 { font-size: 1.1rem; margin-top: 1.5rem; }
     .muted { color: #555; font-size: 0.9rem; }
-    table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
-    th, td { border: 1px solid #ccc; padding: 0.4rem 0.5rem; text-align: left; }
-    th { background: #f4f4f4; }
-    button { padding: 0.5rem 1rem; margin-right: 0.5rem; cursor: pointer; }
-    #chartWind { max-height: 320px; }
-    .row { display: flex; gap: 2rem; flex-wrap: wrap; }
-    .col { flex: 1 1 400px; }
+    table.data { border-collapse: collapse; width: 100%; margin-top: 0.5rem; font-size: 0.85rem; }
+    table.data th, table.data td { border: 1px solid var(--border); padding: 0.35rem 0.5rem; text-align: left; vertical-align: top; }
+    table.data th { background: var(--bg-h); }
+    table.data tr:hover { background: #fafafa; }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.75rem 1.25rem; align-items: end; margin: 1rem 0; }
+    label { display: block; font-weight: 600; font-size: 0.85rem; margin-bottom: 0.25rem; }
+    input, select { width: 100%; max-width: 280px; padding: 0.45rem 0.5rem; box-sizing: border-box; }
+    button { padding: 0.5rem 1rem; margin: 0.35rem 0.5rem 0.35rem 0; cursor: pointer; }
+    #chartWind { max-height: 420px; }
+    #chartImp { max-height: 280px; }
+    .row { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+    .col { flex: 1 1 380px; }
+    .callout { border-left: 4px solid #2563eb; padding: 0.5rem 0.75rem; background: #f0f6ff; margin: 1rem 0; font-size: 0.9rem; }
+    .ref-img { max-width: 100%; height: auto; border: 1px solid var(--border); margin-top: 0.5rem; }
+    caption { caption-side: top; text-align: left; font-weight: 700; padding-bottom: 0.35rem; }
   </style>
 </head>
 <body>
   <h1>ASTM E1300 teaching workflow</h1>
   <p class="muted">
-    Oracle = code-based LR from this repo. ML = k-nearest neighbors on oracle-generated training rows (NumPy).
-    Wind = logarithmic profile (see wind-data.ch). Not for production design.
+    <strong>Oracle</strong> = code-based LR (this repo). <strong>ML</strong> = k-NN on oracle training data.
+    Wind uses the <strong>logarithmic profile</strong> (same form as
+    <a href="https://wind-data.ch/tools/profile.php" target="_blank" rel="noopener">wind-data.ch</a>).
+    Workshop / teaching only — not for production design.
   </p>
-  <button type="button" id="btnDemo">Run demo analyze</button>
-  <button type="button" id="btnLast">Refresh last result</button>
+
+  <h2>Wind parameters</h2>
+  <p class="muted">Enter reference conditions, then choose roughness length <code>z₀</code> (terrain). The chart below compares vertical profiles for <strong>all</strong> roughness classes at the same reference wind — similar in spirit to standard terrain-category diagrams.</p>
+
+  <div class="form-grid">
+    <div>
+      <label for="h1">Height above ground for reference wind <code>h₁</code> (m)</label>
+      <input type="number" id="h1" value="10" min="1" step="0.1" />
+    </div>
+    <div>
+      <label for="v1">Wind speed at <code>h₁</code> (m/s)</label>
+      <input type="number" id="v1" value="17.56" min="0.1" step="0.01" />
+    </div>
+    <div>
+      <label for="z0">Roughness length <code>z₀</code> (m) — design case</label>
+      <select id="z0"></select>
+    </div>
+    <div>
+      <label for="pf">Pressure factor (× dynamic pressure)</label>
+      <input type="number" id="pf" value="1" min="0.1" step="0.05" />
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>Analyze</strong> uses the selected <code>z₀</code> for pressures on the demo glazing panels. Adjust panels in the script or extend the API later for your Grasshopper export.
+  </div>
+
+  <button type="button" id="btnAnalyze">Run analyze (demo panels)</button>
+  <button type="button" id="btnRedraw">Redraw wind chart only</button>
+  <button type="button" id="btnLast">Refresh last API result</button>
+
   <div class="row">
     <div class="col">
-      <h2>Wind profile (demo curve)</h2>
+      <h2>Vertical wind profile (logarithmic)</h2>
+      <p class="muted">Multiple curves: one per roughness class in the table; the <strong>thick</strong> line is your selected <code>z₀</code>.</p>
       <canvas id="chartWind"></canvas>
     </div>
     <div class="col">
-      <h2>Feature emphasis (pseudo-importance)</h2>
+      <h2>Reference: terrain categories (concept)</h2>
+      <p class="muted">Typical textbook diagram: wind builds up faster with height over smooth terrain (low <code>z₀</code>) than over urban roughness (high <code>z₀</code>). Place an optional image at <code>/static/wind_terrain_reference.png</code> in the repo to show it here.</p>
+      <img id="terrainRef" class="ref-img" alt="Optional terrain diagram" style="display:none" />
+      <h2>Feature emphasis (ML pseudo-importance)</h2>
       <canvas id="chartImp"></canvas>
     </div>
   </div>
+
+  <h2>Roughness classes and lengths <code>z₀</code></h2>
+  <p class="muted">Aligned with common European / Swiss wind-tool tables (e.g. wind-data.ch).</p>
+  <table class="data" id="roughTable">
+    <caption>Roughness classes</caption>
+    <thead>
+      <tr><th>Class</th><th>Roughness length <code>z₀</code></th><th>Types of terrain surfaces</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
   <h2>Panel results</h2>
   <div id="tbl"></div>
-  <pre id="raw" class="muted" style="white-space: pre-wrap;"></pre>
+  <pre id="raw" class="muted" style="white-space: pre-wrap; font-size: 0.75rem; max-height: 240px; overflow: auto;"></pre>
+
   <script>
+    const ROUGHNESS = [
+      { class: '0', z0: 0.0002, desc: 'Water surfaces: sea and lakes' },
+      { class: '0.5', z0: 0.0024, desc: 'Open terrain with a smooth surface, e.g. concrete, airport runways, mowed grass, etc.' },
+      { class: '1', z0: 0.03, desc: 'Open agricultural land without fences and hedges, possibly with widely scattered buildings and very gentle hills' },
+      { class: '1.5', z0: 0.055, desc: 'Agricultural land with a few houses and 8 m high hedges at a distance of more than 1 km' },
+      { class: '2', z0: 0.1, desc: 'Agricultural land with a few houses and 8 m high hedges at a distance of about 500 m' },
+      { class: '2.5', z0: 0.2, desc: 'Agricultural land with many houses, bushes and plants, or 8 m high hedges at a distance of about 250 m' },
+      { class: '3', z0: 0.4, desc: 'Villages, small towns, agricultural land with many or high hedges, forests and very rough and uneven terrain' },
+      { class: '3.5', z0: 0.6, desc: 'Larger cities with tall buildings' },
+      { class: '4', z0: 1.6, desc: 'Large cities with tall buildings and skyscrapers' }
+    ];
+
+    const PALETTE = ['#1e3a5f','#2e7d8f','#2d8f5c','#8faa3c','#c9a227','#c17f2a','#b85c38','#a84848','#8b3d8b','#5c4a7a'];
+
     const api = () => window.location.origin;
     let chartWind, chartImp;
 
-    function windCurve(z0, v1, h1) {
-      const heights = [];
-      const speeds = [];
-      for (let h = 10; h <= 150; h += 10) {
-        const h2 = Math.max(h, z0 + 0.01);
-        const v2 = v1 * Math.log(h2 / z0) / Math.log(h1 / z0);
-        heights.push(h);
-        speeds.push(v2);
-      }
-      return { heights, speeds };
+    function fillRoughnessTable() {
+      const tb = document.querySelector('#roughTable tbody');
+      ROUGHNESS.forEach((r) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${r.class}</td><td>${r.z0} m</td><td>${r.desc}</td>`;
+        tb.appendChild(tr);
+      });
+      const sel = document.getElementById('z0');
+      ROUGHNESS.forEach((r, i) => {
+        const o = document.createElement('option');
+        o.value = String(r.z0);
+        o.textContent = `Class ${r.class} — z₀ = ${r.z0} m`;
+        sel.appendChild(o);
+      });
+      sel.value = '0.4';
     }
 
-    function drawWind(z0, v1, h1) {
-      const { heights, speeds } = windCurve(z0, v1, h1);
+    function vAtHeight(v1, h1, h2, z0) {
+      const hz = Math.max(h2, z0 + 0.001);
+      const h1s = Math.max(h1, z0 + 0.001);
+      return v1 * Math.log(hz / z0) / Math.log(h1s / z0);
+    }
+
+    function datasetsForComparison(v1, h1, selectedZ0) {
+      const heights = [];
+      for (let h = 10; h <= 150; h += 10) heights.push(h);
+      const datasets = ROUGHNESS.map((r, i) => {
+        const z0 = r.z0;
+        const speeds = heights.map((h) => vAtHeight(v1, h1, h, z0));
+        const selected = Math.abs(z0 - selectedZ0) < 1e-9;
+        return {
+          label: `Class ${r.class} (z₀=${z0})`,
+          data: speeds.map((s, j) => ({ x: s, y: heights[j] })),
+          borderColor: PALETTE[i % PALETTE.length],
+          backgroundColor: 'transparent',
+          borderWidth: selected ? 3 : 1,
+          pointRadius: 0,
+          tension: 0.15
+        };
+      });
+      return { heights, datasets };
+    }
+
+    function drawWindMulti(v1, h1, z0Sel) {
+      const { datasets } = datasetsForComparison(v1, h1, z0Sel);
       const ctx = document.getElementById('chartWind');
       if (chartWind) chartWind.destroy();
       chartWind = new Chart(ctx, {
         type: 'line',
-        data: {
-          labels: heights,
-          datasets: [{ label: 'v (m/s)', data: speeds, borderColor: '#2563eb', tension: 0.2 }]
-        },
+        data: { datasets },
         options: {
           indexAxis: 'y',
+          parsing: false,
           scales: {
-            x: { title: { display: true, text: 'Wind speed (m/s)' } },
-            y: { title: { display: true, text: 'Height (m)' } }
+            x: {
+              title: { display: true, text: 'Wind speed (m/s)' },
+              beginAtZero: true
+            },
+            y: {
+              title: { display: true, text: 'Height above ground (m)' },
+              min: 0
+            }
+          },
+          plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } },
+            title: { display: true, text: 'Vertical profiles: v(h) for each z₀ (reference: v₁ at h₁)' }
           }
         }
       });
@@ -91,25 +201,30 @@
     function tableFrom(resp) {
       const panels = resp.panels || [];
       if (!panels.length) return '<p>No panels.</p>';
-      let html = '<table><thead><tr><th>id</th><th>q (kPa)</th><th>Oracle LR</th><th>OK</th><th>Min nom.</th><th>ML nom</th><th>ML LR est</th></tr></thead><tbody>';
+      let html = '<table class="data"><thead><tr><th>id</th><th>q design (kPa)</th><th>Oracle LR</th><th>OK</th><th>Min nom.</th><th>ML nom</th><th>ML LR est</th></tr></thead><tbody>';
       for (const p of panels) {
         html += '<tr>';
         html += `<td>${p.id}</td>`;
-        html += `<td>${p.wind.design_load_kpa.toFixed(3)}</td>`;
-        html += `<td>${p.oracle.governing_LR_kpa.toFixed(3)}</td>`;
+        html += `<td>${p.wind.design_load_kpa.toFixed(4)}</td>`;
+        html += `<td>${p.oracle.governing_LR_kpa.toFixed(4)}</td>`;
         html += `<td>${p.oracle.acceptable}</td>`;
         html += `<td>${p.oracle.minimum_nominal_key ?? '—'}</td>`;
         html += `<td>${p.ml.predicted_nominal_key ?? '—'}</td>`;
-        html += `<td>${p.ml.predicted_governing_LR_kpa != null ? p.ml.predicted_governing_LR_kpa.toFixed(3) : '—'}</td>`;
+        html += `<td>${p.ml.predicted_governing_LR_kpa != null ? p.ml.predicted_governing_LR_kpa.toFixed(4) : '—'}</td>`;
         html += '</tr>';
       }
       html += '</tbody></table>';
       return html;
     }
 
-    async function runDemo() {
+    async function runAnalyze() {
+      const h1 = parseFloat(document.getElementById('h1').value, 10);
+      const v1 = parseFloat(document.getElementById('v1').value, 10);
+      const z0 = parseFloat(document.getElementById('z0').value, 10);
+      const pf = parseFloat(document.getElementById('pf').value, 10) || 1;
+
       const body = {
-        wind: { v1_m_s: 17.56, h1_m: 10, z0_m: 0.4, pressure_factor: 1.0 },
+        wind: { v1_m_s: v1, h1_m: h1, z0_m: z0, pressure_factor: pf },
         panels: [
           { id: 'P0', width_m: 1.2, height_m: 1.5, elevation_m: 80, case: 'single_monolithic', support_family: 'monolithic_four_sides', duration: 'short', lites: [{ glass: 'AN', construction: 'monolithic' }] },
           { id: 'P1', width_m: 1.5, height_m: 2.0, elevation_m: 120, case: 'single_monolithic', support_family: 'monolithic_four_sides', duration: 'short', lites: [{ glass: 'AN', construction: 'monolithic' }] }
@@ -119,7 +234,7 @@
       const data = await r.json();
       document.getElementById('tbl').innerHTML = tableFrom(data);
       document.getElementById('raw').textContent = JSON.stringify(data, null, 2);
-      drawWind(body.wind.z0_m, body.wind.v1_m_s, body.wind.h1_m);
+      drawWindMulti(v1, h1, z0);
       const imp = data.panels && data.panels[0] && data.panels[0].ml && data.panels[0].ml.feature_importance;
       drawImp(imp);
     }
@@ -133,9 +248,30 @@
       document.getElementById('raw').textContent = JSON.stringify(wrap, null, 2);
     }
 
-    document.getElementById('btnDemo').onclick = runDemo;
+    fillRoughnessTable();
+    document.getElementById('btnAnalyze').onclick = runAnalyze;
+    document.getElementById('btnRedraw').onclick = () => {
+      const h1 = parseFloat(document.getElementById('h1').value, 10);
+      const v1 = parseFloat(document.getElementById('v1').value, 10);
+      const z0 = parseFloat(document.getElementById('z0').value, 10);
+      drawWindMulti(v1, h1, z0);
+    };
     document.getElementById('btnLast').onclick = refreshLast;
-    drawWind(0.4, 17.56, 10);
+    document.getElementById('z0').addEventListener('change', () => {
+      const h1 = parseFloat(document.getElementById('h1').value, 10);
+      const v1 = parseFloat(document.getElementById('v1').value, 10);
+      const z0 = parseFloat(document.getElementById('z0').value, 10);
+      drawWindMulti(v1, h1, z0);
+    });
+
+    (function optionalTerrainImage() {
+      const img = document.getElementById('terrainRef');
+      img.src = api() + '/static/wind_terrain_reference.png';
+      img.onload = () => { img.style.display = 'block'; };
+      img.onerror = () => { img.style.display = 'none'; };
+    })();
+
+    drawWindMulti(17.56, 10, 0.4);
   </script>
 </body>
 </html>
