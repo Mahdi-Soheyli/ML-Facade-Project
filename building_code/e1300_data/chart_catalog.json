@@ -1,0 +1,65 @@
+{
+  "comment": "Maps nominal glass designation keys to Annex A1 figure ids (E1300-24). NFL/deflection charts are raster images in the PDF; numeric lookup uses calibrated surrogate surfaces (see DATASET.md).",
+  "monolithic_four_sides": {
+    "2.0_picture": "A1.1",
+    "2.5": "A1.2",
+    "2.7_lami": "A1.3",
+    "3": "A1.4",
+    "4": "A1.5",
+    "5": "A1.6",
+    "6": "A1.7",
+    "8": "A1.8",
+    "10": "A1.9",
+    "12": "A1.10",
+    "16": "A1.11",
+    "19": "A1.12",
+    "22": "A1.13",
+    "25": "A1.14"
+  },
+  "laminated_four_sides": {
+    "5": "A1.29",
+    "6": "A1.30",
+    "8": "A1.31",
+    "10": "A1.32",
+    "12": "A1.33",
+    "16": "A1.34",
+    "19": "A1.35"
+  },
+  "monolithic_three_sides": {
+    "2.5": "A1.15",
+    "2.7_lami": "A1.16",
+    "3": "A1.17",
+    "4": "A1.18",
+    "5": "A1.19",
+    "6": "A1.20",
+    "8": "A1.21",
+    "10": "A1.22",
+    "12": "A1.23",
+    "16": "A1.24",
+    "19": "A1.25",
+    "22": "A1.26"
+  },
+  "monolithic_two_sides": "A1.27",
+  "monolithic_one_side": "A1.28",
+  "laminated_three_sides": {
+    "5": "A1.36",
+    "6": "A1.37",
+    "8": "A1.38",
+    "10": "A1.39",
+    "12": "A1.40",
+    "16": "A1.41",
+    "19": "A1.42"
+  },
+  "laminated_two_sides": "A1.43",
+  "laminated_one_side": "A1.44",
+  "support_family_scale": {
+    "monolithic_four_sides": 1.0,
+    "laminated_four_sides": 1.0,
+    "monolithic_three_sides": 0.92,
+    "laminated_three_sides": 0.92,
+    "monolithic_two_sides": 0.58,
+    "laminated_two_sides": 0.58,
+    "monolithic_one_side": 0.38,
+    "laminated_one_side": 0.38
+  }
+}
