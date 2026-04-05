@@ -1,0 +1,8 @@
+.git
+__pycache__
+*.pyc
+.pytest_cache
+.cursor
+*.csv
+E1300_FreeForm_ML_Data.*
+building_code/ASTM*.pdf

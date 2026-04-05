@@ -1,8 +1,8 @@
 """
-Train GBDT (nominal class) + MLP (LR regression) from oracle labels.
+Train KNN memory bank + LR targets from oracle labels (NumPy only — no sklearn).
 
 Run from repo root: python scripts/train_ml.py
-Outputs: models/gbdt_nominal.joblib, models/mlp_lr.joblib, models/ml_meta.json
+Outputs: models/ml_bundle.npz, models/ml_meta.json
 """
 
 from __future__ import annotations
@@ -12,12 +12,10 @@ import random
 import sys
 from pathlib import Path
 
+import numpy as np
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-
-from sklearn.ensemble import GradientBoostingClassifier  # noqa: E402
-from sklearn.neural_network import MLPRegressor  # noqa: E402
-import joblib  # noqa: E402
 
 from app.oracle_panel import minimum_nominal_single  # noqa: E402
 from app.wind import design_pressure_kpa, wind_speed_at_height  # noqa: E402
@@ -26,11 +24,12 @@ from app.schemas import WindParams  # noqa: E402
 
 def main() -> None:
     random.seed(42)
+    np.random.seed(42)
     nominal_path = ROOT / "building_code" / "e1300_data" / "tables.json"
     nominal_keys = json.loads(nominal_path.read_text(encoding="utf-8"))["nominal_keys_ordered"]
     key_to_idx = {k: i for i, k in enumerate(nominal_keys)}
 
-    X: list[list[float]] = []
+    rows: list[list[float]] = []
     y_cls: list[int] = []
     y_lr: list[float] = []
 
@@ -62,29 +61,22 @@ def main() -> None:
             "short",
         )
         ar = long / short if short > 0 else 1.0
-        X.append([short, long, ar, design, elev, z0, v2])
+        rows.append([short, long, ar, design, elev, z0, v2])
         y_cls.append(key_to_idx[nk])
         y_lr.append(lr)
 
-    clf = GradientBoostingClassifier(
-        n_estimators=80,
-        max_depth=4,
-        random_state=42,
-    )
-    clf.fit(X, y_cls)
-
-    mlp = MLPRegressor(
-        hidden_layer_sizes=(32, 16),
-        max_iter=500,
-        random_state=42,
-    )
-    mlp.fit(X, y_lr)
+    X = np.array(rows, dtype=np.float64)
+    yc = np.array(y_cls, dtype=np.int32)
+    yr = np.array(y_lr, dtype=np.float64)
 
     out = ROOT / "models"
     out.mkdir(exist_ok=True)
-    joblib.dump(clf, out / "gbdt_nominal.joblib")
-    joblib.dump(mlp, out / "mlp_lr.joblib")
-
+    np.savez_compressed(
+        out / "ml_bundle.npz",
+        X=X,
+        y_cls=yc,
+        y_lr=yr,
+    )
     meta = {
         "nominal_keys": nominal_keys,
         "feature_names": [
@@ -96,9 +88,11 @@ def main() -> None:
             "z0_m",
             "v_at_panel_m_s",
         ],
+        "knn_k": 7,
+        "backend": "numpy_knn",
     }
     (out / "ml_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
-    print("Wrote models to", out)
+    print("Wrote", out / "ml_bundle.npz")
 
 
 if __name__ == "__main__":

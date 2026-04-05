@@ -1,0 +1,1 @@
+"""FastAPI teaching app package."""

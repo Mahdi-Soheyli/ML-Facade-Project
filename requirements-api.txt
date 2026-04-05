@@ -1,0 +1,4 @@
+# API service (Railway / Docker). Core repo also uses numpy<2 from requirements.txt.
+fastapi>=0.109
+uvicorn[standard]>=0.27
+pydantic>=2.5

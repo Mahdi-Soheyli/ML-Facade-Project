@@ -89,8 +89,8 @@ class OracleResult(BaseModel):
 class MLResult(BaseModel):
     predicted_nominal_key: str | None = None
     predicted_governing_LR_kpa: float | None = None
-    model_gbdt_available: bool = False
-    model_mlp_available: bool = False
+    ml_backend: str | None = None
+    ml_available: bool = False
     feature_importance: dict[str, float] | None = None
 
 

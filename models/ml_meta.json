@@ -1,0 +1,29 @@
+{
+  "nominal_keys": [
+    "2.0_picture",
+    "2.5",
+    "2.7_lami",
+    "3",
+    "4",
+    "5",
+    "6",
+    "8",
+    "10",
+    "12",
+    "16",
+    "19",
+    "22",
+    "25"
+  ],
+  "feature_names": [
+    "short_m",
+    "long_m",
+    "aspect_ratio",
+    "design_load_kpa",
+    "elevation_m",
+    "z0_m",
+    "v_at_panel_m_s"
+  ],
+  "knn_k": 7,
+  "backend": "numpy_knn"
+}
