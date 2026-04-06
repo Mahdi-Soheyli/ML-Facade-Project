@@ -59,6 +59,11 @@ try:
 except ImportError:
     rs = None
 
+try:
+    import scriptcontext as sc
+except ImportError:
+    sc = None
+
 
 def _is_grasshopper_datatree(obj):
     """True for GH DataTree in IronPython and CPython (isinstance(DataTree) often fails in CPython)."""
@@ -191,6 +196,28 @@ def _coerce_guid_geometry(o):
         except Exception:
             pass
     return o
+
+
+def _run_state_key():
+    try:
+        gid = str(ghenv.Component.InstanceGuid)
+    except Exception:
+        gid = "ghpython_send_panels"
+    return "ml_facade_send_run_state:" + gid
+
+
+def _is_rising_edge(run_flag):
+    """
+    Send only once when Run changes False -> True.
+    Keeps Grasshopper recomputes from POSTing on every slider move / viewport update.
+    """
+    if sc is None:
+        return bool(run_flag)
+    key = _run_state_key()
+    prev = bool(sc.sticky.get(key, False))
+    curr = bool(run_flag)
+    sc.sticky[key] = curr
+    return curr and (not prev)
 
 
 # Public Railway URL (no trailing slash)
@@ -513,7 +540,11 @@ def main():
     Surface_Tree = g.get("Surface_Tree", Surface_Tree)
 
     if not Run:
+        _is_rising_edge(False)
         return False, 0, "skipped (Run is False)", ""
+
+    if not _is_rising_edge(Run):
+        return False, 0, "waiting for Run rising edge (toggle False -> True to send once)", ""
 
     if Panel_Tree is None:
         return False, 0, "Panel_Tree is empty", ""
