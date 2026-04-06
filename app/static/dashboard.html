@@ -4,6 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>ASTM E1300 — ML Facade Workshop</title>
+  <link rel="icon" type="image/png" href="/static/favicon.png"/>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script type="importmap">
@@ -355,31 +356,62 @@
       if (!panels || !panels.length) return;
       const xO = panels.map((p) => p.wind.design_load_kpa);
       const yO = panels.map((p) => p.oracle.governing_LR_kpa);
+      const stratColors = ['#c2410c', '#7c3aed', '#db2777', '#ca8a04', '#0e7490'];
+      const datasets = [
+        {
+          label: 'Oracle LR (kPa)',
+          data: xO.map((x, i) => ({ x, y: yO[i] })),
+          backgroundColor: '#0f766e',
+          pointRadius: 4
+        }
+      ];
+      const p0 = panels[0];
+      const byStrat = p0 && p0.ml_by_strategy && typeof p0.ml_by_strategy === 'object' ? p0.ml_by_strategy : null;
+      if (byStrat && Object.keys(byStrat).length) {
+        let ci = 0;
+        for (const sid of Object.keys(byStrat)) {
+          const label = (byStrat[sid].strategy_label || sid) + ' (est.)';
+          datasets.push({
+            label,
+            data: panels
+              .map((p) => {
+                const ms = p.ml_by_strategy && p.ml_by_strategy[sid];
+                if (!ms || ms.predicted_governing_LR_kpa == null) return null;
+                return { x: p.wind.design_load_kpa, y: ms.predicted_governing_LR_kpa };
+              })
+              .filter(Boolean),
+            backgroundColor: stratColors[ci % stratColors.length],
+            pointRadius: 3
+          });
+          ci++;
+        }
+      } else {
+        datasets.push({
+          label: 'ML LR est (kPa)',
+          data: panels
+            .map((p) => {
+              const y = p.ml.predicted_governing_LR_kpa;
+              if (y == null) return null;
+              return { x: p.wind.design_load_kpa, y };
+            })
+            .filter(Boolean),
+          backgroundColor: '#c2410c',
+          pointRadius: 3
+        });
+      }
       chartScatter = new Chart(ctx, {
         type: 'scatter',
-        data: {
-          datasets: [
-            { label: 'Oracle LR (kPa)', data: xO.map((x, i) => ({ x, y: yO[i] })), backgroundColor: '#0f766e' },
-            {
-              label: 'ML LR est (kPa)',
-              data: panels
-                .map((p) => {
-                  const y = p.ml.predicted_governing_LR_kpa;
-                  if (y == null) return null;
-                  return { x: p.wind.design_load_kpa, y };
-                })
-                .filter(Boolean),
-              backgroundColor: '#c2410c'
-            }
-          ]
-        },
+        data: { datasets },
         options: {
           maintainAspectRatio: false,
           scales: {
             x: { title: { display: true, text: 'Design pressure q (kPa)' } },
             y: { title: { display: true, text: 'LR (kPa)' } }
           },
-          plugins: { title: { display: true, text: 'Design load vs resistance', font: { size: 11 } } }
+          plugins: {
+            title: { display: true, text: 'Oracle vs k-NN strategies (same training data)', font: { size: 11 } },
+            legend: { labels: { boxWidth: 10, font: { size: 9 } } }
+          }
         }
       });
     }

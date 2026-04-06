@@ -10,6 +10,15 @@ def test_health():
     assert r.json()["status"] == "ok"
 
 
+def test_ml_strategies_endpoint():
+    c = TestClient(app)
+    r = c.get("/api/ml/strategies")
+    assert r.status_code == 200
+    data = r.json()
+    assert "strategies" in data
+    assert len(data["strategies"]) >= 1
+
+
 def test_analyze_single_panel():
     c = TestClient(app)
     r = c.post(

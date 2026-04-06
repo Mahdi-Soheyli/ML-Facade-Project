@@ -13,7 +13,10 @@ Use the **same** `python` for `pip install` and for `python scripts/train_ml.py`
 interpreter, conda, or Windows Store Python). If you see `ModuleNotFoundError` for numpy or
 pydantic, install requirements-train into that interpreter.
 
-Outputs: models/ml_bundle.npz, models/ml_meta.json
+Outputs:
+  models/ml_bundle.npz   — training matrix + labels (one file shared by all k-NN strategies)
+  models/ml_meta.json    — feature names, nominal key order, legacy default knn_k
+  models/ml_registry.json — list of strategies (k=3,7,15) for the API and charts
 """
 
 from __future__ import annotations
@@ -103,7 +106,20 @@ def main() -> None:
         "backend": "numpy_knn",
     }
     (out / "ml_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+
+    registry = {
+        "default_strategy_id": "knn_k7",
+        "strategies": [
+            {"id": "knn_k3", "knn_k": 3, "label": "k-NN k=3"},
+            {"id": "knn_k7", "knn_k": 7, "label": "k-NN k=7"},
+            {"id": "knn_k15", "knn_k": 15, "label": "k-NN k=15"},
+        ],
+    }
+    (out / "ml_registry.json").write_text(json.dumps(registry, indent=2), encoding="utf-8")
+
     print("Wrote", out / "ml_bundle.npz")
+    print("Wrote", out / "ml_meta.json")
+    print("Wrote", out / "ml_registry.json")
 
 
 if __name__ == "__main__":

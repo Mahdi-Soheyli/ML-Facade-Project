@@ -1,4 +1,4 @@
-"""KNN + numpy bundle (no sklearn) for Railway compatibility."""
+"""KNN + numpy bundle (no sklearn) for Railway compatibility. Multi-k strategies via ml_registry.json."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ _MODEL_DIR = Path(__file__).resolve().parents[1] / "models"
 
 _bundle = None
 _meta: dict | None = None
+_registry: dict | None = None
 
 
 def load_models() -> None:
@@ -27,16 +28,46 @@ def load_models() -> None:
     _meta = json.loads(mp.read_text(encoding="utf-8")) if mp.is_file() else {}
 
 
+def load_registry() -> dict:
+    """Strategy list for k-NN (same training data, different k)."""
+    global _registry
+    if _registry is not None:
+        return _registry
+    rp = _MODEL_DIR / "ml_registry.json"
+    if rp.is_file():
+        _registry = json.loads(rp.read_text(encoding="utf-8"))
+    else:
+        # Fallback: single strategy from legacy ml_meta.json
+        load_models()
+        k = int((_meta or {}).get("knn_k", 7))
+        _registry = {
+            "default_strategy_id": "knn_default",
+            "strategies": [
+                {
+                    "id": "knn_default",
+                    "knn_k": k,
+                    "label": f"k-NN (k={k})",
+                }
+            ],
+        }
+    return _registry
+
+
 def _knn_indices(X_train: np.ndarray, x: np.ndarray, k: int) -> np.ndarray:
     d = np.sum((X_train - x) ** 2, axis=1)
     k = min(k, len(d))
     return np.argpartition(d, k - 1)[:k]
 
 
-def predict_ml_row(features: list[float]) -> tuple[str | None, float | None, dict[str, float] | None]:
+def predict_ml_row(
+    features: list[float],
+    knn_k: int | None = None,
+) -> tuple[str | None, float | None, dict[str, float] | None]:
     """
     features order:
     short_m, long_m, aspect_ratio, design_load_kpa, elevation_m, z0_m, v_at_panel_m_s
+
+    knn_k: neighbor count; if None, uses ml_meta.json knn_k (legacy).
     """
     load_models()
     if _bundle is None or _meta is None:
@@ -45,9 +76,8 @@ def predict_ml_row(features: list[float]) -> tuple[str | None, float | None, dic
     y_cls = _bundle["y_cls"]
     y_lr = _bundle["y_lr"]
     x = np.array(features, dtype=np.float64).reshape(1, -1)
-    k = int(_meta.get("knn_k", 7))
+    k = int(knn_k if knn_k is not None else _meta.get("knn_k", 7))
     idx = _knn_indices(X_train, x[0], k)
-    # classification: mode of neighbor classes
     vals, counts = np.unique(y_cls[idx], return_counts=True)
     cls = int(vals[np.argmax(counts)])
     nominal_keys = _meta.get("nominal_keys", [])
@@ -65,7 +95,6 @@ def predict_ml_row(features: list[float]) -> tuple[str | None, float | None, dic
             "v_at_panel_m_s",
         ],
     )
-    # pseudo-importance: inverse variance contribution (teaching visualization only)
     imp = {names[i]: 1.0 / (np.std(X_train[:, i]) + 1e-9) for i in range(len(names))}
     s = sum(imp.values())
     imp = {a: float(b / s) for a, b in imp.items()}

@@ -174,6 +174,8 @@ class OracleResult(BaseModel):
 
 
 class MLResult(BaseModel):
+    strategy_id: str | None = None
+    strategy_label: str | None = None
     predicted_nominal_key: str | None = None
     predicted_governing_LR_kpa: float | None = None
     ml_backend: str | None = None
@@ -188,6 +190,10 @@ class PanelResult(BaseModel):
     wind: WindDerived
     oracle: OracleResult
     ml: MLResult
+    ml_by_strategy: dict[str, MLResult] = Field(
+        default_factory=dict,
+        description="All k-NN strategies from ml_registry.json for comparison charts",
+    )
 
 
 class AnalyzeResponse(BaseModel):

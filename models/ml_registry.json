@@ -1,0 +1,20 @@
+{
+  "default_strategy_id": "knn_k7",
+  "strategies": [
+    {
+      "id": "knn_k3",
+      "knn_k": 3,
+      "label": "k-NN k=3"
+    },
+    {
+      "id": "knn_k7",
+      "knn_k": 7,
+      "label": "k-NN k=7"
+    },
+    {
+      "id": "knn_k15",
+      "knn_k": 15,
+      "label": "k-NN k=15"
+    }
+  ]
+}

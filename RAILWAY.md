@@ -101,17 +101,26 @@ python scripts/train_ml.py
 
 If you see `ModuleNotFoundError` for `numpy` or `pydantic`, install into the **same** interpreter you use to run the script (Windows Store Python, conda base, etc.).
 
-### “Application failed to respond” on Railway
+### Root directory in Railway settings
 
-1. **Health check** — This repo exposes **`GET /health`** (200 + JSON). The root **`railway.toml`** sets `healthcheckPath = "/health"`. In the Railway dashboard, under the service, set **Healthcheck path** to **`/health`** (or rely on the file after redeploy). If a healthcheck was set to a path that never returns 200, traffic may not switch to the new deployment.
+- **Leave empty (or `/`)** when this repository’s **Git root** is the **ML-Facade Project** folder and the **`Dockerfile`** is at the top level of what Railway clones.
+- Set a **Root Directory** only if the repo is a **monorepo** and this app lives in a subfolder (e.g. `ML-Facade Project`). Then Railway must build from that folder so it finds the `Dockerfile` and copies `app/`, `models/`, etc.
 
-2. **Public networking** — Service → **Settings** → **Networking** → generate a **public domain** (or confirm the URL targets **this** service).
+Wrong root directory → wrong or missing build context → broken image or **502**.
 
-3. **Port** — The container must listen on **`$PORT`** (Railway sets it, often `8080`). The Dockerfile uses `uvicorn ... --port ${PORT:-8000}`.
+### “Application failed to respond” / 502 on `/health`
 
-4. **Logs** — If deploy logs show `Uvicorn running on http://0.0.0.0:8080` but the site still fails, open **Deploy logs** for errors *after* startup, and try `curl -I https://<your-domain>/health` from your machine.
+1. **Correct service** — The public URL must attach to the **web** service that runs this Docker image, not a database or empty service.
 
-5. **Hostname allowlists** — If you add middleware that filters by `Host`, allow **`healthcheck.railway.app`** (Railway’s healthcheck hostname).
+2. **Networking → target port** — Must match the port Uvicorn listens on (see deploy logs, e.g. `8080`). Railway sets **`PORT`**; the Dockerfile uses it. If you set a **custom target port** in the UI, it must match **`PORT`** from the logs.
+
+3. **Start command** — In the service **Settings**, clear any **custom Start Command** that overrides the image `CMD` unless you know it runs Uvicorn on `$PORT`.
+
+4. **Health check** — **`GET /health`** returns `{"status":"ok"}`. Set **Healthcheck path** to **`/health`** in Railway (or use `railway.toml` in the repo).
+
+5. **Hostname allowlists** — If you restrict by `Host`, allow **`healthcheck.railway.app`**.
+
+6. **From your PC** — `curl -i https://<your-domain>/health` should return **HTTP/2 200** and JSON. If you get **502**, the edge still cannot reach a healthy process (wrong service, wrong port, or process not listening).
 
 Commit `models/ml_bundle.npz` + `models/ml_meta.json` or bake them into the image after training in CI.
 

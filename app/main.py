@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.clustering import build_clusters
-from app.ml_predict import predict_ml_row
+from app.ml_predict import load_registry, predict_ml_row
 from app.oracle_panel import run_oracle_panel
 from app.schemas import (
     AnalyzeRequest,
@@ -55,6 +55,7 @@ async def _lifespan(app: FastAPI):
     from app.ml_predict import load_models
 
     load_models()
+    load_registry()
     yield
 
 
@@ -78,6 +79,40 @@ def _features(panel: PanelInput, wind: WindParams, design_kpa: float) -> list[fl
     return [s, ell, ar, design_kpa, panel.elevation_m, wind.z0_m, v2]
 
 
+def _ml_for_features(feats: list[float]) -> tuple[MLResult, dict[str, MLResult]]:
+    reg = load_registry()
+    by_id: dict[str, MLResult] = {}
+    for s in reg.get("strategies", []):
+        sid = s["id"]
+        kk = int(s["knn_k"])
+        label = str(s.get("label", sid))
+        pn, lr_ml, imp = predict_ml_row(feats, knn_k=kk)
+        by_id[sid] = MLResult(
+            strategy_id=sid,
+            strategy_label=label,
+            predicted_nominal_key=pn,
+            predicted_governing_LR_kpa=lr_ml,
+            ml_backend="numpy_knn" if lr_ml is not None else None,
+            ml_available=lr_ml is not None,
+            feature_importance=imp,
+        )
+    default_id = reg.get("default_strategy_id") or ""
+    if default_id and default_id in by_id:
+        primary = by_id[default_id]
+    elif by_id:
+        primary = next(iter(by_id.values()))
+    else:
+        pn, lr_ml, imp = predict_ml_row(feats)
+        primary = MLResult(
+            predicted_nominal_key=pn,
+            predicted_governing_LR_kpa=lr_ml,
+            ml_backend="numpy_knn" if lr_ml is not None else None,
+            ml_available=lr_ml is not None,
+            feature_importance=imp,
+        )
+    return primary, by_id
+
+
 def _run_analyze(wind: WindParams, panels: list[PanelInput]) -> AnalyzeResponse:
     out: list[PanelResult] = []
     for p in panels:
@@ -85,14 +120,7 @@ def _run_analyze(wind: WindParams, panels: list[PanelInput]) -> AnalyzeResponse:
         v2, q_pa, design = design_pressure_kpa(wind, p.elevation_m)
         lr, ok, det, min_nk = run_oracle_panel(p, design)
         feats = _features(p, wind, design)
-        pn, lr_ml, imp = predict_ml_row(feats)
-        ml = MLResult(
-            predicted_nominal_key=pn,
-            predicted_governing_LR_kpa=lr_ml,
-            ml_backend="numpy_knn" if lr_ml is not None else None,
-            ml_available=lr_ml is not None,
-            feature_importance=imp,
-        )
+        ml, ml_by = _ml_for_features(feats)
         out.append(
             PanelResult(
                 id=p.id,
@@ -110,6 +138,7 @@ def _run_analyze(wind: WindParams, panels: list[PanelInput]) -> AnalyzeResponse:
                     minimum_nominal_key=min_nk,
                 ),
                 ml=ml,
+                ml_by_strategy=ml_by,
             )
         )
     raw_echo: dict[str, Any] = {
@@ -268,6 +297,20 @@ def analyze(req: AnalyzeRequest) -> AnalyzeResponse:
 def health() -> dict[str, str]:
     """Liveness probe for Railway (must return 200 quickly; used by healthcheckPath)."""
     return {"status": "ok"}
+
+
+@app.get("/favicon.ico")
+def favicon():
+    p = STATIC / "favicon.png"
+    if not p.is_file():
+        return JSONResponse({}, status_code=404)
+    return FileResponse(p, media_type="image/png")
+
+
+@app.get("/api/ml/strategies")
+def api_ml_strategies() -> dict[str, Any]:
+    """Registered k-NN strategies (same training data, different k) from models/ml_registry.json."""
+    return load_registry()
 
 
 @app.get("/api/last")
