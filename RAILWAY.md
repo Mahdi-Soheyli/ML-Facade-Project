@@ -39,8 +39,10 @@ Do these in order. You do **not** need to run the app on localhost first if you 
    - Open `https://<your-domain>/` — you should see the **E1300 teaching dashboard** (wind chart, roughness table, demo analyze).
    - Optional: `https://<your-domain>/docs` for OpenAPI.
 
-10. **Grasshopper / scripts**: use that **same base URL** (no trailing slash required for the API). Example:
-    - `POST https://<your-domain>/api/analyze` with JSON per `app/schemas.py`.
+10. **Grasshopper / scripts**: use that **same base URL** (no trailing slash). Paste-in templates live in the repo:
+    - [`scripts/ghpython_send_panels.py`](scripts/ghpython_send_panels.py) — `POST /api/session` with panel geometry and `GH_Path` ids.
+    - [`scripts/ghpython_receive_clusters.py`](scripts/ghpython_receive_clusters.py) — `GET /api/session/{session_id}/results` into cluster branches (ids + colors + thickness mm).
+    - Example flow: upload session → `POST /api/session/{id}/calculate` (from the dashboard or API) → receive results in Grasshopper.
 
 ### Environment variables
 
@@ -64,9 +66,14 @@ In Railway, you can set a health check path to **`/`** or **`/docs`** so the pla
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/` | HTML dashboard (`app/static/dashboard.html`) |
-| POST | `/api/analyze` | JSON body per `app/schemas.py` |
+| GET | `/` | HTML dashboard (`app/static/dashboard.html`), Tailwind + four panels (3D, wind, ML, clusters) |
+| POST | `/api/session` | Upload `panels`; `session_id` optional (server creates UUID if omitted). Wind is **not** sent from GH — use **PUT** below or dashboard. |
+| PUT | `/api/session/{id}/wind` | Set `v1_m_s`, `h1_m`, `z0_m`, `air_density_kg_m3`, `pressure_factor` from the **web app** (or API). |
+| POST | `/api/session/{id}/calculate` | Run oracle + ML on stored panels using wind from the session (set in the web app). |
+| GET | `/api/session/{id}/results` | Panels, clusters (colors + Table 4 min. mm), `input_geometry` for 3D when vertices were sent |
+| POST | `/api/analyze` | Direct analyze: `panels` **or** `session_id` (loads panels from session) + `wind` |
 | GET | `/api/last` | Last in-memory result (optional `?session_id=`) |
+| GET | `/static/ardaena-logo.svg` | Ribbon logo |
 | GET | `/static/wind_terrain_reference.png` | Optional terrain diagram (see below) |
 
 ---
@@ -90,3 +97,7 @@ python scripts/train_ml.py
 Commit `models/ml_bundle.npz` + `models/ml_meta.json` or bake them into the image after training in CI.
 
 The deployed **ML** layer is a **k-nearest neighbors** predictor on NumPy arrays (no sklearn in the container). Training labels come from the same ASTM E1300 oracle used for the “oracle” column in the API response.
+
+**Training host:** run `python scripts/train_ml.py` **locally or in CI**, then commit `models/` and redeploy. Railway runs **inference only**; training on the live web service is unnecessary for this workshop.
+
+**Sessions:** panel data and results are stored **in memory** in the API process. A restart or new deploy clears all sessions.

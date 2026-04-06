@@ -3,132 +3,301 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>E1300 Teaching Dashboard</title>
+  <title>ASTM E1300 — ML Facade Workshop</title>
+  <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <style>
-    :root { --border: #ccc; --bg-h: #f4f4f4; }
-    body { font-family: system-ui, Segoe UI, sans-serif; margin: 1rem 1.5rem 2rem; max-width: 1200px; }
-    h1 { font-size: 1.35rem; }
-    h2 { font-size: 1.1rem; margin-top: 1.5rem; }
-    .muted { color: #555; font-size: 0.9rem; }
-    table.data { border-collapse: collapse; width: 100%; margin-top: 0.5rem; font-size: 0.85rem; }
-    table.data th, table.data td { border: 1px solid var(--border); padding: 0.35rem 0.5rem; text-align: left; vertical-align: top; }
-    table.data th { background: var(--bg-h); }
-    table.data tr:hover { background: #fafafa; }
-    .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.75rem 1.25rem; align-items: end; margin: 1rem 0; }
-    label { display: block; font-weight: 600; font-size: 0.85rem; margin-bottom: 0.25rem; }
-    input, select { width: 100%; max-width: 280px; padding: 0.45rem 0.5rem; box-sizing: border-box; }
-    button { padding: 0.5rem 1rem; margin: 0.35rem 0.5rem 0.35rem 0; cursor: pointer; }
-    #chartWind { max-height: 420px; }
-    #chartImp { max-height: 280px; }
-    .row { display: flex; gap: 1.5rem; flex-wrap: wrap; }
-    .col { flex: 1 1 380px; }
-    .callout { border-left: 4px solid #2563eb; padding: 0.5rem 0.75rem; background: #f0f6ff; margin: 1rem 0; font-size: 0.9rem; }
-    .ref-img { max-width: 100%; height: auto; border: 1px solid var(--border); margin-top: 0.5rem; }
-    caption { caption-side: top; text-align: left; font-weight: 700; padding-bottom: 0.35rem; }
-  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
 </head>
-<body>
-  <h1>ASTM E1300 teaching workflow</h1>
-  <p class="muted">
-    <strong>Oracle</strong> = code-based LR (this repo). <strong>ML</strong> = k-NN on oracle training data.
-    Wind uses the <strong>logarithmic profile</strong> (same form as
-    <a href="https://wind-data.ch/tools/profile.php" target="_blank" rel="noopener">wind-data.ch</a>).
-    Workshop / teaching only — not for production design.
-  </p>
-
-  <h2>Wind parameters</h2>
-  <p class="muted">Enter reference conditions, then choose roughness length <code>z₀</code> (terrain). The chart below compares vertical profiles for <strong>all</strong> roughness classes at the same reference wind — similar in spirit to standard terrain-category diagrams.</p>
-
-  <div class="form-grid">
-    <div>
-      <label for="h1">Height above ground for reference wind <code>h₁</code> (m)</label>
-      <input type="number" id="h1" value="10" min="1" step="0.1" />
+<body class="bg-slate-100 text-slate-900 min-h-screen flex flex-col">
+  <header class="bg-white border-b border-slate-200 shadow-sm">
+    <div class="max-w-[1600px] mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <img src="/static/ardaena-logo.svg" alt="Ardaena" class="h-9 w-auto" width="200" height="40"/>
+        <span class="text-sm text-slate-500 hidden sm:inline border-l pl-3 border-slate-200">E1300 teaching · wind + oracle + k-NN</span>
+      </div>
+      <nav class="flex flex-wrap items-center gap-3 text-sm">
+        <a class="text-teal-700 hover:underline font-medium" href="https://www.ardaena.com" target="_blank" rel="noopener">ardaena.com</a>
+        <a class="text-slate-600 hover:underline" href="mailto:soheyli@ardaena.com">soheyli@ardaena.com</a>
+        <a class="inline-flex items-center gap-1 rounded-md bg-[#0A66C2] text-white px-3 py-1.5 text-xs font-semibold hover:bg-[#095196]" href="https://www.linkedin.com/in/mahdisoheyli/" target="_blank" rel="noopener">LinkedIn</a>
+      </nav>
     </div>
-    <div>
-      <label for="v1">Wind speed at <code>h₁</code> (m/s)</label>
-      <input type="number" id="v1" value="17.56" min="0.1" step="0.01" />
-    </div>
-    <div>
-      <label for="z0">Roughness length <code>z₀</code> (m) — design case</label>
-      <select id="z0"></select>
-    </div>
-    <div>
-      <label for="pf">Pressure factor (× dynamic pressure)</label>
-      <input type="number" id="pf" value="1" min="0.1" step="0.05" />
-    </div>
-  </div>
+  </header>
 
-  <div class="callout">
-    <strong>Analyze</strong> uses the selected <code>z₀</code> for pressures on the demo glazing panels. Adjust panels in the script or extend the API later for your Grasshopper export.
-  </div>
+  <main class="flex-1 max-w-[1600px] w-full mx-auto px-4 py-4">
+    <p class="text-sm text-slate-600 mb-4 max-w-4xl">
+      <strong class="text-slate-800">Workshop only.</strong> Oracle = ASTM E1300 load resistance from this codebase; ML = k-NN on oracle-labeled training data.
+      Wind uses a <strong>logarithmic profile</strong> (same closed form as
+      <a class="text-teal-700 underline" href="https://wind-data.ch/tools/profile.php" target="_blank" rel="noopener">wind-data.ch</a>).
+      Not for production design.
+    </p>
 
-  <button type="button" id="btnAnalyze">Run analyze (demo panels)</button>
-  <button type="button" id="btnRedraw">Redraw wind chart only</button>
-  <button type="button" id="btnLast">Refresh last API result</button>
-
-  <div class="row">
-    <div class="col">
-      <h2>Vertical wind profile (logarithmic)</h2>
-      <p class="muted">Multiple curves: one per roughness class in the table; the <strong>thick</strong> line is your selected <code>z₀</code>.</p>
-      <canvas id="chartWind"></canvas>
+    <div class="flex flex-wrap items-end gap-3 mb-4 p-4 bg-white rounded-lg border border-slate-200 shadow-sm">
+      <div class="min-w-[220px]">
+        <label class="block text-xs font-semibold text-slate-600 mb-1">Session ID (manage here; paste into GH if needed)</label>
+        <div class="flex flex-wrap gap-1 items-center">
+          <input id="sessionId" type="text" class="border border-slate-300 rounded px-2 py-1.5 text-sm flex-1 min-w-[12rem] font-mono text-xs"/>
+          <button type="button" id="btnNewSession" class="rounded border border-slate-300 bg-white text-xs px-2 py-1.5 hover:bg-slate-50" title="New UUID">New</button>
+          <button type="button" id="btnCopySession" class="rounded border border-slate-300 bg-white text-xs px-2 py-1.5 hover:bg-slate-50">Copy</button>
+        </div>
+        <p class="text-[10px] text-slate-500 mt-1">Stored in browser storage. Paste into Grasshopper <code class="bg-slate-100 px-1 rounded">Session_ID</code> if needed. Open with <code class="bg-slate-100 px-1 rounded">?session=&lt;uuid&gt;</code> to share a link.</p>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">Region preset (basic)</label>
+        <select id="regionPreset" class="border border-slate-300 rounded px-2 py-1.5 text-sm min-w-[200px]"></select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">h₁ (m)</label>
+        <input id="h1" type="number" value="10" min="1" step="0.1" class="border border-slate-300 rounded px-2 py-1.5 text-sm w-24"/>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">v₁ (m/s)</label>
+        <input id="v1" type="number" value="17.56" min="0.1" step="0.01" class="border border-slate-300 rounded px-2 py-1.5 text-sm w-28"/>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">z₀ (m)</label>
+        <select id="z0" class="border border-slate-300 rounded px-2 py-1.5 text-sm min-w-[220px]"></select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">Pressure factor</label>
+        <input id="pf" type="number" value="1" min="0.1" step="0.05" class="border border-slate-300 rounded px-2 py-1.5 text-sm w-20"/>
+      </div>
+      <div class="flex flex-wrap gap-2 items-center">
+        <button type="button" id="btnSaveWind" class="rounded-md bg-indigo-700 text-white text-sm font-medium px-3 py-2 hover:bg-indigo-800" title="Save v₁, h₁, z₀, pressure factor to the server for this session">Save wind to server</button>
+        <button type="button" id="btnSendDemo" class="rounded-md bg-teal-700 text-white text-sm font-medium px-3 py-2 hover:bg-teal-800">Send demo panels (mixed tri/quad)</button>
+        <button type="button" id="btnCalculate" class="rounded-md bg-slate-800 text-white text-sm font-medium px-3 py-2 hover:bg-slate-900">Calculate thicknesses &amp; clusters</button>
+        <button type="button" id="btnRedrawWind" class="rounded-md border border-slate-300 bg-white text-sm px-3 py-2 hover:bg-slate-50">Redraw wind chart</button>
+        <button type="button" id="btnQuickAnalyze" class="rounded-md border border-teal-600 text-teal-800 text-sm px-3 py-2 hover:bg-teal-50">Quick analyze (no session)</button>
+      </div>
     </div>
-    <div class="col">
-      <h2>Reference: terrain categories (concept)</h2>
-      <p class="muted">Typical textbook diagram: wind builds up faster with height over smooth terrain (low <code>z₀</code>) than over urban roughness (high <code>z₀</code>). Place an optional image at <code>/static/wind_terrain_reference.png</code> in the repo to show it here.</p>
-      <img id="terrainRef" class="ref-img" alt="Optional terrain diagram" style="display:none" />
-      <h2>Feature emphasis (ML pseudo-importance)</h2>
-      <canvas id="chartImp"></canvas>
+    <p class="text-xs text-slate-600 mb-4 -mt-2 px-1 max-w-4xl">
+      <strong>Wind</strong> is configured only here (not in Grasshopper). Click <strong>Save wind to server</strong> before <strong>Calculate</strong>, or use <strong>Calculate</strong> after demo send — it saves wind automatically. Grasshopper sends only <strong>Panel_Tree</strong> (+ optional <code class="bg-slate-100 px-1 rounded text-[11px]">Session_ID</code>).
+    </p>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <!-- 1: 3D -->
+      <section class="bg-white rounded-lg border border-slate-200 shadow-sm p-3 flex flex-col min-h-[320px]">
+        <h2 class="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2 mb-2">1 — Panel geometry (3D)</h2>
+        <p class="text-xs text-slate-500 mb-2">After calculation, panels are colored by thickness cluster. Orbit: left drag; zoom: wheel.</p>
+        <div id="view3d" class="flex-1 min-h-[280px] rounded bg-slate-900 relative"></div>
+        <p id="view3dHint" class="text-xs text-amber-700 mt-2">Send a session from Grasshopper or use “Send demo panels”, then calculate.</p>
+      </section>
+
+      <!-- 2: Wind -->
+      <section class="bg-white rounded-lg border border-slate-200 shadow-sm p-3 flex flex-col min-h-[320px]">
+        <h2 class="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2 mb-2">2 — Wind profile (logarithmic)</h2>
+        <p class="text-xs text-slate-500 mb-2">Curves for each roughness class; thick line = selected z₀. Educational vertical profile only.</p>
+        <div class="flex-1 min-h-[260px]"><canvas id="chartWind"></canvas></div>
+        <img id="terrainRef" class="mt-2 max-h-32 rounded border border-slate-200 hidden" alt="Terrain reference"/>
+      </section>
+
+      <!-- 3: ML -->
+      <section class="bg-white rounded-lg border border-slate-200 shadow-sm p-3 flex flex-col min-h-[300px]">
+        <h2 class="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2 mb-2">3 — Oracle vs ML</h2>
+        <p class="text-xs text-slate-500 mb-2">Scatter: design pressure vs load resistance. Bars: feature weights (teaching visualization).</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 flex-1">
+          <div class="min-h-[200px]"><canvas id="chartScatter"></canvas></div>
+          <div class="min-h-[200px]"><canvas id="chartImp"></canvas></div>
+        </div>
+      </section>
+
+      <!-- 4: Results -->
+      <section class="bg-white rounded-lg border border-slate-200 shadow-sm p-3 flex flex-col min-h-[300px]">
+        <h2 class="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2 mb-2">4 — Clusters &amp; thickness (Table 4 min. mm)</h2>
+        <p class="text-xs text-slate-500 mb-2">Panels grouped by governing nominal from oracle scan; thickness = minimum per Table 4 mapping.</p>
+        <div id="clusterChips" class="flex flex-wrap gap-2 mb-2 min-h-[2rem]"></div>
+        <div class="overflow-auto flex-1 max-h-[240px] text-xs" id="tbl"></div>
+        <pre id="raw" class="text-[10px] text-slate-500 whitespace-pre-wrap max-h-28 overflow-auto mt-2 border-t border-slate-100 pt-2"></pre>
+      </section>
     </div>
-  </div>
+  </main>
 
-  <h2>Roughness classes and lengths <code>z₀</code></h2>
-  <p class="muted">Aligned with common European / Swiss wind-tool tables (e.g. wind-data.ch).</p>
-  <table class="data" id="roughTable">
-    <caption>Roughness classes</caption>
-    <thead>
-      <tr><th>Class</th><th>Roughness length <code>z₀</code></th><th>Types of terrain surfaces</th></tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-  <h2>Panel results</h2>
-  <div id="tbl"></div>
-  <pre id="raw" class="muted" style="white-space: pre-wrap; font-size: 0.75rem; max-height: 240px; overflow: auto;"></pre>
+    let scene, camera, renderer, controls, panelGroup;
+
+    function hexToNum(hex) {
+      if (!hex || hex[0] !== '#') return 0x64748b;
+      return parseInt(hex.slice(1), 16);
+    }
+
+    function initThree(container) {
+      const w = container.clientWidth || 400;
+      const h = container.clientHeight || 280;
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0f172a);
+      camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 500);
+      camera.position.set(4, 3, 6);
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(w, h);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      container.innerHTML = '';
+      container.appendChild(renderer.domElement);
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+      const d = new THREE.DirectionalLight(0xffffff, 0.9);
+      d.position.set(5, 10, 7);
+      scene.add(d);
+      panelGroup = new THREE.Group();
+      scene.add(panelGroup);
+      const grid = new THREE.GridHelper(12, 12, 0x334155, 0x1e293b);
+      grid.position.y = -0.01;
+      scene.add(grid);
+      function tick() {
+        requestAnimationFrame(tick);
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      tick();
+      window.addEventListener('resize', () => {
+        const el = document.getElementById('view3d');
+        if (!el || !renderer) return;
+        const rw = el.clientWidth;
+        const rh = el.clientHeight;
+        camera.aspect = rw / rh;
+        camera.updateProjectionMatrix();
+        renderer.setSize(rw, rh);
+      });
+    }
+
+    function clearPanels() {
+      if (!panelGroup) return;
+      while (panelGroup.children.length) {
+        const o = panelGroup.children[0];
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) o.material.dispose();
+        panelGroup.remove(o);
+      }
+    }
+
+    function addPanelMesh(vertices_m, colorHex) {
+      const n = vertices_m.length;
+      if (n !== 3 && n !== 4) return;
+      const flat = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) {
+        flat[i * 3] = vertices_m[i][0];
+        flat[i * 3 + 1] = vertices_m[i][1];
+        flat[i * 3 + 2] = vertices_m[i][2];
+      }
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute('position', new THREE.BufferAttribute(flat, 3));
+      const idx = n === 3 ? [0, 1, 2] : [0, 1, 2, 0, 2, 3];
+      geom.setIndex(idx);
+      geom.computeVertexNormals();
+      const mat = new THREE.MeshPhongMaterial({
+        color: hexToNum(colorHex),
+        side: THREE.DoubleSide,
+        shininess: 40,
+      });
+      const mesh = new THREE.Mesh(geom, mat);
+      panelGroup.add(mesh);
+    }
+
+    window.__threeClear = clearPanels;
+    window.__threeAddPanel = addPanelMesh;
+    window.addEventListener('DOMContentLoaded', () => {
+      initThree(document.getElementById('view3d'));
+    });
+  </script>
 
   <script>
     const ROUGHNESS = [
-      { class: '0', z0: 0.0002, desc: 'Water surfaces: sea and lakes' },
-      { class: '0.5', z0: 0.0024, desc: 'Open terrain with a smooth surface, e.g. concrete, airport runways, mowed grass, etc.' },
-      { class: '1', z0: 0.03, desc: 'Open agricultural land without fences and hedges, possibly with widely scattered buildings and very gentle hills' },
-      { class: '1.5', z0: 0.055, desc: 'Agricultural land with a few houses and 8 m high hedges at a distance of more than 1 km' },
-      { class: '2', z0: 0.1, desc: 'Agricultural land with a few houses and 8 m high hedges at a distance of about 500 m' },
-      { class: '2.5', z0: 0.2, desc: 'Agricultural land with many houses, bushes and plants, or 8 m high hedges at a distance of about 250 m' },
-      { class: '3', z0: 0.4, desc: 'Villages, small towns, agricultural land with many or high hedges, forests and very rough and uneven terrain' },
-      { class: '3.5', z0: 0.6, desc: 'Larger cities with tall buildings' },
-      { class: '4', z0: 1.6, desc: 'Large cities with tall buildings and skyscrapers' }
+      { class: '0', z0: 0.0002, desc: 'Water surfaces' },
+      { class: '0.5', z0: 0.0024, desc: 'Open smooth terrain' },
+      { class: '1', z0: 0.03, desc: 'Open agricultural' },
+      { class: '1.5', z0: 0.055, desc: 'Agricultural + sparse houses' },
+      { class: '2', z0: 0.1, desc: 'Agricultural + hedges' },
+      { class: '2.5', z0: 0.2, desc: 'Agricultural + many houses' },
+      { class: '3', z0: 0.4, desc: 'Villages, forests' },
+      { class: '3.5', z0: 0.6, desc: 'Larger cities' },
+      { class: '4', z0: 1.6, desc: 'Dense urban' }
+    ];
+
+    const REGION_PRESETS = [
+      { label: '— Custom (use fields) —', v1: null, z0: null },
+      { label: 'Open coast / sea', v1: 22, z0: 0.0002 },
+      { label: 'Open countryside', v1: 20, z0: 0.03 },
+      { label: 'Suburban (workshop default)', v1: 17.56, z0: 0.4 },
+      { label: 'Urban centre', v1: 16, z0: 0.6 },
+      { label: 'Dense city', v1: 15, z0: 1.6 }
     ];
 
     const PALETTE = ['#1e3a5f','#2e7d8f','#2d8f5c','#8faa3c','#c9a227','#c17f2a','#b85c38','#a84848','#8b3d8b','#5c4a7a'];
-
     const api = () => window.location.origin;
-    let chartWind, chartImp;
+    const LS_SESSION = 'mlfacade_session_id';
 
-    function fillRoughnessTable() {
-      const tb = document.querySelector('#roughTable tbody');
-      ROUGHNESS.forEach((r) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${r.class}</td><td>${r.z0} m</td><td>${r.desc}</td>`;
-        tb.appendChild(tr);
+    let chartWind, chartScatter, chartImp;
+
+    function initSessionId() {
+      const params = new URLSearchParams(window.location.search);
+      const q = params.get('session');
+      let sid = (q && q.trim()) ? q.trim() : localStorage.getItem(LS_SESSION);
+      if (!sid) {
+        sid = crypto.randomUUID();
+      }
+      localStorage.setItem(LS_SESSION, sid);
+      document.getElementById('sessionId').value = sid;
+    }
+
+    async function saveWindToServer() {
+      const sid = document.getElementById('sessionId').value.trim();
+      if (!sid) {
+        alert('Session ID is empty.');
+        return false;
+      }
+      const r = await fetch(api() + '/api/session/' + encodeURIComponent(sid) + '/wind', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(windParamsFromForm())
       });
-      const sel = document.getElementById('z0');
-      ROUGHNESS.forEach((r, i) => {
-        const o = document.createElement('option');
-        o.value = String(r.z0);
-        o.textContent = `Class ${r.class} — z₀ = ${r.z0} m`;
-        sel.appendChild(o);
-      });
-      sel.value = '0.4';
+      if (!r.ok) {
+        const t = await r.text();
+        alert('Save wind failed: ' + t);
+        return false;
+      }
+      return true;
+    }
+
+    const DEMO_PANELS = [
+      {
+        id: '0;0',
+        n_edges: 3,
+        vertices_m: [[0, 0, 0], [2, 0, 0], [1, 1.5, 0]],
+        elevation_m: 40,
+        case: 'single_monolithic',
+        support_family: 'monolithic_four_sides',
+        duration: 'short',
+        lites: [{ glass: 'AN', construction: 'monolithic' }]
+      },
+      {
+        id: '0;1',
+        n_edges: 4,
+        vertices_m: [[3, 0, 0], [5.5, 0, 0], [5.5, 2.2, 0], [3, 2.2, 0]],
+        elevation_m: 70,
+        case: 'single_monolithic',
+        support_family: 'monolithic_four_sides',
+        duration: 'short',
+        lites: [{ glass: 'AN', construction: 'monolithic' }]
+      }
+    ];
+
+    function windParamsFromForm() {
+      return {
+        v1_m_s: parseFloat(document.getElementById('v1').value, 10),
+        h1_m: parseFloat(document.getElementById('h1').value, 10),
+        z0_m: parseFloat(document.getElementById('z0').value, 10),
+        air_density_kg_m3: 1.225,
+        pressure_factor: parseFloat(document.getElementById('pf').value, 10) || 1
+      };
     }
 
     function vAtHeight(v1, h1, h2, z0) {
@@ -165,22 +334,52 @@
         type: 'line',
         data: { datasets },
         options: {
+          maintainAspectRatio: false,
           indexAxis: 'y',
           parsing: false,
           scales: {
-            x: {
-              title: { display: true, text: 'Wind speed (m/s)' },
-              beginAtZero: true
-            },
-            y: {
-              title: { display: true, text: 'Height above ground (m)' },
-              min: 0
-            }
+            x: { title: { display: true, text: 'Wind speed (m/s)' }, beginAtZero: true },
+            y: { title: { display: true, text: 'Height (m)' }, min: 0 }
           },
           plugins: {
-            legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } },
-            title: { display: true, text: 'Vertical profiles: v(h) for each z₀ (reference: v₁ at h₁)' }
+            legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 9 } } },
+            title: { display: true, text: 'v(h) for each z₀ (thick = selected)', font: { size: 11 } }
           }
+        }
+      });
+    }
+
+    function drawScatter(panels) {
+      const ctx = document.getElementById('chartScatter');
+      if (chartScatter) chartScatter.destroy();
+      if (!panels || !panels.length) return;
+      const xO = panels.map((p) => p.wind.design_load_kpa);
+      const yO = panels.map((p) => p.oracle.governing_LR_kpa);
+      chartScatter = new Chart(ctx, {
+        type: 'scatter',
+        data: {
+          datasets: [
+            { label: 'Oracle LR (kPa)', data: xO.map((x, i) => ({ x, y: yO[i] })), backgroundColor: '#0f766e' },
+            {
+              label: 'ML LR est (kPa)',
+              data: panels
+                .map((p) => {
+                  const y = p.ml.predicted_governing_LR_kpa;
+                  if (y == null) return null;
+                  return { x: p.wind.design_load_kpa, y };
+                })
+                .filter(Boolean),
+              backgroundColor: '#c2410c'
+            }
+          ]
+        },
+        options: {
+          maintainAspectRatio: false,
+          scales: {
+            x: { title: { display: true, text: 'Design pressure q (kPa)' } },
+            y: { title: { display: true, text: 'LR (kPa)' } }
+          },
+          plugins: { title: { display: true, text: 'Design load vs resistance', font: { size: 11 } } }
         }
       });
     }
@@ -193,70 +392,155 @@
       const data = Object.values(feat);
       chartImp = new Chart(ctx, {
         type: 'bar',
-        data: { labels, datasets: [{ label: 'weight', data }] },
-        options: { scales: { x: { ticks: { maxRotation: 45, minRotation: 45 } } } }
+        data: { labels, datasets: [{ label: 'Relative weight', data, backgroundColor: '#475569' }] },
+        options: {
+          maintainAspectRatio: false,
+          scales: { x: { ticks: { maxRotation: 45, minRotation: 45, font: { size: 9 } } } },
+          plugins: { title: { display: true, text: 'Feature emphasis (teaching)', font: { size: 11 } } }
+        }
       });
     }
 
-    function tableFrom(resp) {
-      const panels = resp.panels || [];
-      if (!panels.length) return '<p>No panels.</p>';
-      let html = '<table class="data"><thead><tr><th>id</th><th>q design (kPa)</th><th>Oracle LR</th><th>OK</th><th>Min nom.</th><th>ML nom</th><th>ML LR est</th></tr></thead><tbody>';
+    function tableFromResults(data) {
+      const panels = data.panels || [];
+      if (!panels.length) return '<p class="text-slate-500">No panels.</p>';
+      let html = '<table class="w-full border-collapse text-left"><thead><tr class="bg-slate-100">';
+      html += '<th class="border border-slate-200 p-1.5">id</th><th class="border border-slate-200 p-1.5">q (kPa)</th><th class="border border-slate-200 p-1.5">Oracle LR</th><th class="border border-slate-200 p-1.5">OK</th>';
+      html += '<th class="border border-slate-200 p-1.5">Nom. (oracle)</th><th class="border border-slate-200 p-1.5">Min mm</th><th class="border border-slate-200 p-1.5">ML nom</th><th class="border border-slate-200 p-1.5">Cluster</th></tr></thead><tbody>';
       for (const p of panels) {
-        html += '<tr>';
-        html += `<td>${p.id}</td>`;
-        html += `<td>${p.wind.design_load_kpa.toFixed(4)}</td>`;
-        html += `<td>${p.oracle.governing_LR_kpa.toFixed(4)}</td>`;
-        html += `<td>${p.oracle.acceptable}</td>`;
-        html += `<td>${p.oracle.minimum_nominal_key ?? '—'}</td>`;
-        html += `<td>${p.ml.predicted_nominal_key ?? '—'}</td>`;
-        html += `<td>${p.ml.predicted_governing_LR_kpa != null ? p.ml.predicted_governing_LR_kpa.toFixed(4) : '—'}</td>`;
+        const mm = data.clusters && p.cluster_index != null
+          ? (data.clusters.find((c) => c.cluster_index === p.cluster_index) || {}).thickness_mm_min
+          : null;
+        html += '<tr class="hover:bg-slate-50">';
+        html += `<td class="border border-slate-200 p-1.5 font-mono">${p.id}</td>`;
+        html += `<td class="border border-slate-200 p-1.5">${p.wind.design_load_kpa.toFixed(4)}</td>`;
+        html += `<td class="border border-slate-200 p-1.5">${p.oracle.governing_LR_kpa.toFixed(4)}</td>`;
+        html += `<td class="border border-slate-200 p-1.5">${p.oracle.acceptable}</td>`;
+        html += `<td class="border border-slate-200 p-1.5">${p.oracle.minimum_nominal_key ?? '—'}</td>`;
+        html += `<td class="border border-slate-200 p-1.5">${mm != null ? mm : '—'}</td>`;
+        html += `<td class="border border-slate-200 p-1.5">${p.ml.predicted_nominal_key ?? '—'}</td>`;
+        html += `<td class="border border-slate-200 p-1.5"><span class="inline-block w-3 h-3 rounded mr-1 align-middle" style="background:${p.cluster_color_hex || '#ccc'}"></span>${p.cluster_index != null ? p.cluster_index : '—'}</td>`;
         html += '</tr>';
       }
       html += '</tbody></table>';
       return html;
     }
 
-    async function runAnalyze() {
-      const h1 = parseFloat(document.getElementById('h1').value, 10);
-      const v1 = parseFloat(document.getElementById('v1').value, 10);
-      const z0 = parseFloat(document.getElementById('z0').value, 10);
-      const pf = parseFloat(document.getElementById('pf').value, 10) || 1;
+    function renderClusterChips(clusters) {
+      const el = document.getElementById('clusterChips');
+      el.innerHTML = '';
+      if (!clusters || !clusters.length) return;
+      for (const c of clusters) {
+        const span = document.createElement('span');
+        span.className = 'inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-xs';
+        span.innerHTML = `<span class="w-3 h-3 rounded" style="background:${c.color_hex}"></span> ${c.nominal_key || '?'} · ${c.thickness_mm_min != null ? c.thickness_mm_min + ' mm' : ''} · ${c.panel_ids.length} panels`;
+        el.appendChild(span);
+      }
+    }
 
+    function updateThreeFromResults(data) {
+      document.getElementById('view3dHint').textContent = '';
+      if (!window.__threeClear) return;
+      window.__threeClear();
+      const panels = data.panels || [];
+      for (const p of panels) {
+        const g = p.input_geometry;
+        if (g && g.vertices_m && g.n_edges) {
+          window.__threeAddPanel(g.vertices_m, p.cluster_color_hex || '#94a3b8');
+        }
+      }
+      if (!panels.some((p) => p.input_geometry)) {
+        document.getElementById('view3dHint').textContent = 'No vertex geometry in session (use “Send demo” or Grasshopper sender).';
+      }
+    }
+
+    async function sendDemo() {
+      const sid = document.getElementById('sessionId').value.trim();
+      if (!sid) { alert('Session ID missing'); return; }
+      await saveWindToServer();
+      const body = { session_id: sid, panels: DEMO_PANELS };
+      const r = await fetch(api() + '/api/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const data = await r.json();
+      if (!r.ok) { alert(JSON.stringify(data)); return; }
+      document.getElementById('raw').textContent = JSON.stringify(data, null, 2);
+      document.getElementById('view3dHint').textContent = 'Session uploaded. Run “Calculate” to analyze and color panels.';
+    }
+
+    async function calculateSession() {
+      const sid = document.getElementById('sessionId').value.trim();
+      if (!sid) { alert('Session ID missing'); return; }
+      await saveWindToServer();
+      const r = await fetch(api() + '/api/session/' + encodeURIComponent(sid) + '/calculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}'
+      });
+      const analyze = await r.json();
+      if (!r.ok) { alert(JSON.stringify(analyze)); return; }
+      const rr = await fetch(api() + '/api/session/' + encodeURIComponent(sid) + '/results');
+      const data = await rr.json();
+      document.getElementById('tbl').innerHTML = tableFromResults(data);
+      document.getElementById('raw').textContent = JSON.stringify(data, null, 2);
+      renderClusterChips(data.clusters);
+      drawScatter(data.panels);
+      const imp = data.panels && data.panels[0] && data.panels[0].ml && data.panels[0].ml.feature_importance;
+      drawImp(imp);
+      updateThreeFromResults(data);
+    }
+
+    async function quickAnalyze() {
+      const w = windParamsFromForm();
       const body = {
-        wind: { v1_m_s: v1, h1_m: h1, z0_m: z0, pressure_factor: pf },
+        wind: w,
         panels: [
           { id: 'P0', width_m: 1.2, height_m: 1.5, elevation_m: 80, case: 'single_monolithic', support_family: 'monolithic_four_sides', duration: 'short', lites: [{ glass: 'AN', construction: 'monolithic' }] },
           { id: 'P1', width_m: 1.5, height_m: 2.0, elevation_m: 120, case: 'single_monolithic', support_family: 'monolithic_four_sides', duration: 'short', lites: [{ glass: 'AN', construction: 'monolithic' }] }
         ]
       };
       const r = await fetch(api() + '/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      const data = await r.json();
-      document.getElementById('tbl').innerHTML = tableFrom(data);
-      document.getElementById('raw').textContent = JSON.stringify(data, null, 2);
-      drawWindMulti(v1, h1, z0);
-      const imp = data.panels && data.panels[0] && data.panels[0].ml && data.panels[0].ml.feature_importance;
+      const analyze = await r.json();
+      if (!r.ok) { alert(JSON.stringify(analyze)); return; }
+      document.getElementById('tbl').innerHTML = tableFromResults({ panels: analyze.panels, clusters: [] });
+      document.getElementById('raw').textContent = JSON.stringify(analyze, null, 2);
+      document.getElementById('clusterChips').innerHTML = '';
+      drawScatter(analyze.panels);
+      const imp = analyze.panels[0] && analyze.panels[0].ml && analyze.panels[0].ml.feature_importance;
       drawImp(imp);
+      document.getElementById('view3dHint').textContent = 'Quick analyze has no mesh; use session flow for 3D.';
     }
 
-    async function refreshLast() {
-      const r = await fetch(api() + '/api/last');
-      if (!r.ok) { document.getElementById('raw').textContent = 'No last run yet.'; return; }
-      const wrap = await r.json();
-      const data = wrap.response;
-      document.getElementById('tbl').innerHTML = tableFrom(data);
-      document.getElementById('raw').textContent = JSON.stringify(wrap, null, 2);
+    function fillRoughness() {
+      const sel = document.getElementById('z0');
+      ROUGHNESS.forEach((r) => {
+        const o = document.createElement('option');
+        o.value = String(r.z0);
+        o.textContent = `Class ${r.class} — z₀ = ${r.z0} m`;
+        sel.appendChild(o);
+      });
+      sel.value = '0.4';
     }
 
-    fillRoughnessTable();
-    document.getElementById('btnAnalyze').onclick = runAnalyze;
-    document.getElementById('btnRedraw').onclick = () => {
+    function fillRegions() {
+      const sel = document.getElementById('regionPreset');
+      REGION_PRESETS.forEach((r) => {
+        const o = document.createElement('option');
+        o.value = r.label;
+        o.textContent = r.label;
+        sel.appendChild(o);
+      });
+    }
+
+    document.getElementById('regionPreset').addEventListener('change', (e) => {
+      const r = REGION_PRESETS.find((x) => x.label === e.target.value);
+      if (!r || r.v1 == null) return;
+      document.getElementById('v1').value = String(r.v1);
+      document.getElementById('z0').value = String(r.z0);
       const h1 = parseFloat(document.getElementById('h1').value, 10);
-      const v1 = parseFloat(document.getElementById('v1').value, 10);
-      const z0 = parseFloat(document.getElementById('z0').value, 10);
+      const v1 = r.v1;
+      const z0 = r.z0;
       drawWindMulti(v1, h1, z0);
-    };
-    document.getElementById('btnLast').onclick = refreshLast;
+    });
+
     document.getElementById('z0').addEventListener('change', () => {
       const h1 = parseFloat(document.getElementById('h1').value, 10);
       const v1 = parseFloat(document.getElementById('v1').value, 10);
@@ -264,14 +548,48 @@
       drawWindMulti(v1, h1, z0);
     });
 
-    (function optionalTerrainImage() {
+    document.getElementById('sessionId').addEventListener('change', () => {
+      const v = document.getElementById('sessionId').value.trim();
+      if (v) localStorage.setItem(LS_SESSION, v);
+    });
+    document.getElementById('btnNewSession').onclick = () => {
+      const s = crypto.randomUUID();
+      localStorage.setItem(LS_SESSION, s);
+      document.getElementById('sessionId').value = s;
+    };
+    document.getElementById('btnCopySession').onclick = async () => {
+      const v = document.getElementById('sessionId').value.trim();
+      try {
+        await navigator.clipboard.writeText(v);
+      } catch (e) {
+        prompt('Copy session id:', v);
+      }
+    };
+    document.getElementById('btnSaveWind').onclick = async () => {
+      const ok = await saveWindToServer();
+      if (ok) alert('Wind parameters saved for this session.');
+    };
+    document.getElementById('btnSendDemo').onclick = sendDemo;
+    document.getElementById('btnCalculate').onclick = calculateSession;
+    document.getElementById('btnRedrawWind').onclick = () => {
+      const h1 = parseFloat(document.getElementById('h1').value, 10);
+      const v1 = parseFloat(document.getElementById('v1').value, 10);
+      const z0 = parseFloat(document.getElementById('z0').value, 10);
+      drawWindMulti(v1, h1, z0);
+    };
+    document.getElementById('btnQuickAnalyze').onclick = quickAnalyze;
+
+    initSessionId();
+    fillRoughness();
+    fillRegions();
+    drawWindMulti(17.56, 10, 0.4);
+
+    (function terrainImg() {
       const img = document.getElementById('terrainRef');
       img.src = api() + '/static/wind_terrain_reference.png';
-      img.onload = () => { img.style.display = 'block'; };
-      img.onerror = () => { img.style.display = 'none'; };
+      img.onload = () => { img.classList.remove('hidden'); };
+      img.onerror = () => {};
     })();
-
-    drawWindMulti(17.56, 10, 0.4);
   </script>
 </body>
 </html>
