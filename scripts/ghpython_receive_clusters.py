@@ -38,6 +38,31 @@ except ImportError:
 API_BASE = "https://ml-facade-project-production.up.railway.app"
 
 
+def _empty_datatree():
+    """
+    Grasshopper's DataTree is generic (DataTree[T]). IronPython cannot call DataTree()
+    (TypeError: cannot instantiate an open generic type). Use DataTree[Object]().
+    """
+    if DataTree is None:
+        return None
+    try:
+        from System import Object
+
+        return DataTree[Object]()
+    except Exception:
+        pass
+    try:
+        import System
+
+        return DataTree[System.Object]()
+    except Exception:
+        pass
+    try:
+        return DataTree()
+    except Exception:
+        return None
+
+
 def main():
     Run = True
     Session_ID = ""
@@ -47,9 +72,14 @@ def main():
     sid = g.get("Session_ID", Session_ID)
     Session_ID = str(sid).strip() if sid is not None else ""
 
-    empty_ids = DataTree() if DataTree else None
-    empty_col = DataTree()
-    empty_thk = DataTree()
+    e = _empty_datatree()
+    empty_ids = e
+    empty_col = _empty_datatree()
+    empty_thk = _empty_datatree()
+    if empty_col is None:
+        empty_col = e
+    if empty_thk is None:
+        empty_thk = e
 
     if not Run:
         return False, 0, "skipped", empty_ids, empty_col, empty_thk
@@ -75,9 +105,11 @@ def main():
         return False, status, txt, empty_ids, empty_col, empty_thk
 
     clusters = data.get("clusters") or []
-    ids_tree = DataTree()
-    col_tree = DataTree()
-    thk_tree = DataTree()
+    ids_tree = _empty_datatree()
+    col_tree = _empty_datatree()
+    thk_tree = _empty_datatree()
+    if ids_tree is None or col_tree is None or thk_tree is None:
+        return False, status, "Could not create Grasshopper DataTree", empty_ids, empty_col, empty_thk
 
     for c in clusters:
         idx = int(c.get("cluster_index", 0))
