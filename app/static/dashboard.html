@@ -576,18 +576,23 @@
       const ctx = document.getElementById('chartScatter');
       if (chartScatter) chartScatter.destroy();
       if (!panels || !panels.length) return;
-      const xO = panels.map((p) => p.wind.design_load_kpa);
-      const yO = panels.map((p) => p.oracle.governing_LR_kpa);
+
+      const MAX_SCATTER = 200;
+      const step = panels.length > MAX_SCATTER ? Math.ceil(panels.length / MAX_SCATTER) : 1;
+      const sampled = step === 1 ? panels : panels.filter((_, i) => i % step === 0);
+
+      const xO = sampled.map((p) => p.wind.design_load_kpa);
+      const yO = sampled.map((p) => p.oracle.governing_LR_kpa);
       const stratColors = ['#c2410c', '#7c3aed', '#db2777', '#ca8a04', '#0e7490'];
       const datasets = [
         {
           label: 'Oracle LR (kPa)',
           data: xO.map((x, i) => ({ x, y: yO[i] })),
           backgroundColor: '#0f766e',
-          pointRadius: 4
+          pointRadius: 3
         }
       ];
-      const p0 = panels[0];
+      const p0 = sampled[0];
       const byStrat = p0 && p0.ml_by_strategy && typeof p0.ml_by_strategy === 'object' ? p0.ml_by_strategy : null;
       if (byStrat && Object.keys(byStrat).length) {
         let ci = 0;
@@ -595,7 +600,7 @@
           const label = (byStrat[sid].strategy_label || sid) + ' (est.)';
           datasets.push({
             label,
-            data: panels
+            data: sampled
               .map((p) => {
                 const ms = p.ml_by_strategy && p.ml_by_strategy[sid];
                 if (!ms || ms.predicted_governing_LR_kpa == null) return null;
@@ -603,14 +608,14 @@
               })
               .filter(Boolean),
             backgroundColor: stratColors[ci % stratColors.length],
-            pointRadius: 3
+            pointRadius: 2
           });
           ci++;
         }
       } else {
         datasets.push({
           label: 'ML LR est (kPa)',
-          data: panels
+          data: sampled
             .map((p) => {
               const y = p.ml.predicted_governing_LR_kpa;
               if (y == null) return null;
@@ -618,20 +623,22 @@
             })
             .filter(Boolean),
           backgroundColor: '#c2410c',
-          pointRadius: 3
+          pointRadius: 2
         });
       }
       chartScatter = new Chart(ctx, {
         type: 'scatter',
         data: { datasets },
         options: {
+          animation: false,
           maintainAspectRatio: false,
           scales: {
             x: { title: { display: true, text: 'Design pressure q (kPa)' } },
             y: { title: { display: true, text: 'LR (kPa)' } }
           },
           plugins: {
-            title: { display: true, text: 'Oracle vs k-NN strategies (same training data)', font: { size: 11 } },
+            tooltip: { enabled: sampled.length < 100 },
+            title: { display: true, text: `Oracle vs k-NN (${panels.length} panels${step > 1 ? ', sampled' : ''})`, font: { size: 11 } },
             legend: { labels: { boxWidth: 10, font: { size: 9 } } }
           }
         }
@@ -648,6 +655,7 @@
         type: 'bar',
         data: { labels, datasets: [{ label: 'Relative weight', data, backgroundColor: '#475569' }] },
         options: {
+          animation: false,
           maintainAspectRatio: false,
           scales: { x: { ticks: { maxRotation: 45, minRotation: 45, font: { size: 9 } } } },
           plugins: { title: { display: true, text: 'Feature emphasis (teaching)', font: { size: 11 } } }
@@ -655,20 +663,40 @@
       });
     }
 
+    const TABLE_PAGE_SIZE = 30;
+    let _tableData = null;
+    let _tableShown = 0;
+
     function tableFromResults(data) {
+      _tableData = data;
+      _tableShown = 0;
       const panels = data.panels || [];
       if (!panels.length) return '<p class="text-slate-500">No panels.</p>';
-      let html = '<table class="w-full border-collapse text-left"><thead><tr class="bg-slate-100">';
+      const limit = Math.min(TABLE_PAGE_SIZE, panels.length);
+      let html = `<p class="text-xs text-slate-500 mb-1">${panels.length} panels total.</p>`;
+      html += '<table class="w-full border-collapse text-left"><thead><tr class="bg-slate-100">';
       html += '<th class="border border-slate-200 p-1.5">id</th><th class="border border-slate-200 p-1.5">q (kPa)</th><th class="border border-slate-200 p-1.5">Oracle LR</th><th class="border border-slate-200 p-1.5">OK</th>';
-      html += '<th class="border border-slate-200 p-1.5">Nom. (oracle)</th><th class="border border-slate-200 p-1.5">Min mm</th><th class="border border-slate-200 p-1.5">ML nom</th><th class="border border-slate-200 p-1.5">Cluster</th></tr></thead><tbody>';
-      for (const p of panels) {
-        const mm = data.clusters && p.cluster_index != null
-          ? (data.clusters.find((c) => c.cluster_index === p.cluster_index) || {}).thickness_mm_min
+      html += '<th class="border border-slate-200 p-1.5">Nom.</th><th class="border border-slate-200 p-1.5">mm</th><th class="border border-slate-200 p-1.5">ML nom</th><th class="border border-slate-200 p-1.5">Cluster</th></tr></thead><tbody id="tblBody">';
+      html += _renderTableRows(panels, data.clusters, 0, limit);
+      html += '</tbody></table>';
+      _tableShown = limit;
+      if (panels.length > limit) {
+        html += `<button id="btnShowMore" class="mt-2 text-xs text-[#4865bd] hover:underline">Show more (${panels.length - limit} remaining)</button>`;
+      }
+      return html;
+    }
+
+    function _renderTableRows(panels, clusters, from, to) {
+      let html = '';
+      for (let i = from; i < to && i < panels.length; i++) {
+        const p = panels[i];
+        const mm = clusters && p.cluster_index != null
+          ? (clusters.find((c) => c.cluster_index === p.cluster_index) || {}).thickness_mm_min
           : null;
-        html += '<tr class="hover:bg-slate-50">';
-        html += `<td class="border border-slate-200 p-1.5 font-mono">${p.id}</td>`;
-        html += `<td class="border border-slate-200 p-1.5">${p.wind.design_load_kpa.toFixed(4)}</td>`;
-        html += `<td class="border border-slate-200 p-1.5">${p.oracle.governing_LR_kpa.toFixed(4)}</td>`;
+        html += `<tr class="hover:bg-slate-50">`;
+        html += `<td class="border border-slate-200 p-1.5 font-mono text-[11px]">${p.id}</td>`;
+        html += `<td class="border border-slate-200 p-1.5">${p.wind.design_load_kpa.toFixed(3)}</td>`;
+        html += `<td class="border border-slate-200 p-1.5">${p.oracle.governing_LR_kpa.toFixed(3)}</td>`;
         html += `<td class="border border-slate-200 p-1.5">${p.oracle.acceptable}</td>`;
         html += `<td class="border border-slate-200 p-1.5">${p.oracle.minimum_nominal_key ?? '—'}</td>`;
         html += `<td class="border border-slate-200 p-1.5">${mm != null ? mm : '—'}</td>`;
@@ -676,8 +704,21 @@
         html += `<td class="border border-slate-200 p-1.5"><span class="inline-block w-3 h-3 rounded mr-1 align-middle" style="background:${p.cluster_color_hex || '#ccc'}"></span>${p.cluster_index != null ? p.cluster_index : '—'}</td>`;
         html += '</tr>';
       }
-      html += '</tbody></table>';
       return html;
+    }
+
+    function _showMoreTableRows() {
+      if (!_tableData) return;
+      const panels = _tableData.panels || [];
+      const next = Math.min(_tableShown + TABLE_PAGE_SIZE, panels.length);
+      const body = document.getElementById('tblBody');
+      if (body) body.insertAdjacentHTML('beforeend', _renderTableRows(panels, _tableData.clusters, _tableShown, next));
+      _tableShown = next;
+      const btn = document.getElementById('btnShowMore');
+      if (btn) {
+        if (next >= panels.length) btn.remove();
+        else btn.textContent = `Show more (${panels.length - next} remaining)`;
+      }
     }
 
     function renderClusterChips(clusters) {
@@ -744,26 +785,44 @@
       await loadSessionGeometryPreview(sid, true);
     }
 
+    function _defer(fn) { return new Promise(r => requestAnimationFrame(() => { fn(); r(); })); }
+
     async function calculateSession() {
       const sid = document.getElementById('sessionId').value.trim();
       if (!sid) { alert('Session ID missing'); return; }
-      await saveWindToServer();
-      const r = await fetch(api() + '/api/session/' + encodeURIComponent(sid) + '/calculate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: '{}'
-      });
-      const analyze = await r.json();
-      if (!r.ok) { alert(JSON.stringify(analyze)); return; }
-      const rr = await fetch(api() + '/api/session/' + encodeURIComponent(sid) + '/results');
-      const data = await rr.json();
-      document.getElementById('tbl').innerHTML = tableFromResults(data);
-      document.getElementById('raw').textContent = JSON.stringify(data, null, 2);
-      renderClusterChips(data.clusters);
-      drawScatter(data.panels);
-      const imp = data.panels && data.panels[0] && data.panels[0].ml && data.panels[0].ml.feature_importance;
-      drawImp(imp);
-      updateThreeFromResults(data);
+      const btn = document.querySelector('[onclick*="calculateSession"]');
+      if (btn) { btn.disabled = true; btn.textContent = 'Calculating…'; }
+      try {
+        await saveWindToServer();
+        const r = await fetch(api() + '/api/session/' + encodeURIComponent(sid) + '/calculate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}'
+        });
+        const analyze = await r.json();
+        if (!r.ok) { alert(JSON.stringify(analyze)); return; }
+        const rr = await fetch(api() + '/api/session/' + encodeURIComponent(sid) + '/results');
+        const data = await rr.json();
+        updateThreeFromResults(data);
+        await _defer(() => renderClusterChips(data.clusters));
+        await _defer(() => { document.getElementById('tbl').innerHTML = tableFromResults(data); _hookShowMore(); });
+        await _defer(() => drawScatter(data.panels));
+        await _defer(() => {
+          const imp = data.panels && data.panels[0] && data.panels[0].ml && data.panels[0].ml.feature_importance;
+          drawImp(imp);
+        });
+        document.getElementById('raw').textContent = `{${data.panels?.length || 0} panels — click "Show raw JSON" to expand}`;
+        document.getElementById('raw').dataset.fullJson = JSON.stringify(data, null, 2);
+        document.getElementById('raw').style.cursor = 'pointer';
+        document.getElementById('raw').onclick = function () { this.textContent = this.dataset.fullJson; this.onclick = null; this.style.cursor = ''; };
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Calculate'; }
+      }
+    }
+
+    function _hookShowMore() {
+      const btn = document.getElementById('btnShowMore');
+      if (btn) btn.addEventListener('click', _showMoreTableRows);
     }
 
     async function quickAnalyze() {
@@ -779,6 +838,7 @@
       const analyze = await r.json();
       if (!r.ok) { alert(JSON.stringify(analyze)); return; }
       document.getElementById('tbl').innerHTML = tableFromResults({ panels: analyze.panels, clusters: [] });
+      _hookShowMore();
       document.getElementById('raw').textContent = JSON.stringify(analyze, null, 2);
       document.getElementById('clusterChips').innerHTML = '';
       drawScatter(analyze.panels);
