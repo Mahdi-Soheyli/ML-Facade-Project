@@ -16,17 +16,17 @@
   }
   </script>
 </head>
-<body class="bg-slate-100 text-slate-900 min-h-screen flex flex-col">
-  <header class="bg-white border-b border-slate-200 shadow-sm">
+<body class="bg-[#f4f6fb] text-slate-900 min-h-screen flex flex-col">
+  <header class="bg-white border-b border-slate-200/80 shadow-sm">
     <div class="max-w-[1600px] mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
-      <div class="flex items-center gap-3">
-        <img src="/static/ardaena-logo.svg" alt="Ardaena" class="h-9 w-auto" width="200" height="40"/>
-        <span class="text-sm text-slate-500 hidden sm:inline border-l pl-3 border-slate-200">E1300 teaching · wind + oracle + k-NN</span>
+      <div class="flex items-center gap-4">
+        <img src="/static/ardaena-2022.png" alt="Ardaena" class="h-11 w-auto max-w-[220px] object-contain object-left" width="220" height="48"/>
+        <span class="text-sm text-slate-500 hidden md:inline border-l border-slate-200 pl-4">E1300 teaching · wind + oracle + k-NN</span>
       </div>
       <nav class="flex flex-wrap items-center gap-3 text-sm">
-        <a class="text-teal-700 hover:underline font-medium" href="https://www.ardaena.com" target="_blank" rel="noopener">ardaena.com</a>
+        <a class="text-[#4865bd] hover:underline font-medium" href="https://www.ardaena.com" target="_blank" rel="noopener">ardaena.com</a>
         <a class="text-slate-600 hover:underline" href="mailto:soheyli@ardaena.com">soheyli@ardaena.com</a>
-        <a class="inline-flex items-center gap-1 rounded-md bg-[#0A66C2] text-white px-3 py-1.5 text-xs font-semibold hover:bg-[#095196]" href="https://www.linkedin.com/in/mahdisoheyli/" target="_blank" rel="noopener">LinkedIn</a>
+        <a class="inline-flex items-center gap-1 rounded-lg bg-[#4865bd] text-white px-3 py-1.5 text-xs font-semibold hover:bg-[#3d56a3]" href="https://www.linkedin.com/in/mahdisoheyli/" target="_blank" rel="noopener">LinkedIn</a>
       </nav>
     </div>
   </header>
@@ -35,71 +35,108 @@
     <p class="text-sm text-slate-600 mb-4 max-w-4xl">
       <strong class="text-slate-800">Workshop only.</strong> Oracle = ASTM E1300 load resistance from this codebase; ML = k-NN on oracle-labeled training data.
       Wind uses a <strong>logarithmic profile</strong> (same closed form as
-      <a class="text-teal-700 underline" href="https://wind-data.ch/tools/profile.php" target="_blank" rel="noopener">wind-data.ch</a>).
+      <a class="text-[#4865bd] underline font-medium" href="https://wind-data.ch/tools/profile.php" target="_blank" rel="noopener">wind-data.ch</a>).
       Not for production design.
     </p>
 
-    <div class="flex flex-wrap items-end gap-3 mb-4 p-4 bg-white rounded-lg border border-slate-200 shadow-sm">
-      <div class="min-w-[220px]">
-        <label class="block text-xs font-semibold text-slate-600 mb-1">Session ID (manage here; paste into GH if needed)</label>
-        <div class="flex flex-wrap gap-1 items-center">
-          <input id="sessionId" type="text" class="border border-slate-300 rounded px-2 py-1.5 text-sm flex-1 min-w-[12rem] font-mono text-xs"/>
-          <button type="button" id="btnNewSession" class="rounded border border-slate-300 bg-white text-xs px-2 py-1.5 hover:bg-slate-50" title="New UUID">New</button>
-          <button type="button" id="btnCopySession" class="rounded border border-slate-300 bg-white text-xs px-2 py-1.5 hover:bg-slate-50">Copy</button>
+    <details class="text-sm text-slate-600 mb-4 max-w-4xl bg-white border border-slate-200 rounded-lg p-3 shadow-sm">
+      <summary class="cursor-pointer font-semibold text-slate-800 select-none">Workshop: many participants · which ML algorithm is this?</summary>
+      <div class="mt-3 space-y-3 border-t border-slate-100 pt-3">
+        <p>
+          <strong class="text-slate-800">Independent sessions.</strong> Each person should use a <strong>unique Session ID</strong> (for example your name, or <code class="bg-slate-100 px-1 rounded text-xs">Firstname_Lastname</code>).
+          The server keeps one panel set and wind settings per ID; another participant’s ID never reads yours.
+          IDs are stored in server memory only — a <strong>deploy or restart</strong> clears all sessions, so treat the workshop slot as ephemeral.
+        </p>
+        <p>
+          <strong class="text-slate-800">Grasshopper → browser.</strong> With <code class="bg-slate-100 px-1 rounded text-xs">Run</code> true and a successful send, the GhPython sender can open this page with <code class="bg-slate-100 px-1 rounded text-xs">?session=…</code> so you set wind here and click Calculate (wind is not sent from Grasshopper).
+        </p>
+        <p class="font-medium text-slate-800">Common algorithm names and how they relate to this app</p>
+        <ul class="list-disc pl-5 space-y-2">
+          <li>
+            <strong>k-nearest neighbors (k-NN)</strong> — Predicts a numeric target by averaging (or weighting) the <em>k</em> training examples closest in feature space.
+            <strong class="text-slate-800">This is what the dashboard implements</strong> (several <em>k</em> values for comparison). Good fit when labels come from a deterministic “oracle” and you want a simple, interpretable interpolating model.
+          </li>
+          <li>
+            <strong>Regression</strong> (linear, ridge, polynomial, etc.) — Learns an explicit function from features to thickness or resistance.
+            <strong class="text-slate-800">Appropriate in principle</strong> for the same prediction task; not the current implementation. Often needs more tuning and care with nonlinear geometry.
+          </li>
+          <li>
+            <strong>Support Vector Machine (SVM)</strong> — In <em>regression</em> form (SVR), it can predict continuous values from features; the classic SVM story is often classification.
+            Possible alternative learner; <strong class="text-slate-800">not used here</strong>. k-NN was chosen for transparency in teaching.
+          </li>
+          <li>
+            <strong>K-means</strong> — Unsupervised: partitions points into <em>k</em> clusters without using oracle labels the same way.
+            The <strong class="text-slate-800">thickness “clusters” in section 4</strong> come from the oracle Table&nbsp;4 mapping, not from K-means. You could use K-means on feature space for a different grouping exercise; that would be a separate pedagogical choice.
+          </li>
+        </ul>
+        <p class="text-xs text-slate-500">Summary: for <em>predicting</em> resistance/thickness from panel features with training labels from this codebase, <strong>k-NN regression</strong> is the algorithm family implemented; the others are useful context or alternatives.</p>
+      </div>
+    </details>
+
+    <div class="flex flex-wrap items-end gap-4 mb-4 p-4 bg-white rounded-xl border border-slate-200/90 shadow-sm">
+      <div class="min-w-[240px] flex-1">
+        <label class="block text-xs font-semibold text-slate-600 mb-1">Session ID</label>
+        <div class="flex flex-wrap gap-2 items-center">
+          <input id="sessionId" type="text" class="border border-slate-300 rounded-lg px-3 py-2 text-sm flex-1 min-w-[12rem] font-mono text-xs bg-[#f8fafc]"/>
+          <button type="button" id="btnNewSession" class="rounded-lg border border-slate-300 bg-white text-xs px-3 py-2 hover:bg-slate-50 text-slate-700" title="New UUID">New</button>
+          <button type="button" id="btnCopySession" class="rounded-lg border border-slate-300 bg-white text-xs px-3 py-2 hover:bg-slate-50 text-slate-700">Copy</button>
         </div>
-        <p class="text-[10px] text-slate-500 mt-1">Stored in browser storage. Paste into Grasshopper <code class="bg-slate-100 px-1 rounded">Session_ID</code> if needed. Open with <code class="bg-slate-100 px-1 rounded">?session=&lt;uuid&gt;</code> to share a link.</p>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-600 mb-1">Region preset (basic)</label>
-        <select id="regionPreset" class="border border-slate-300 rounded px-2 py-1.5 text-sm min-w-[200px]"></select>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-600 mb-1">h₁ (m)</label>
-        <input id="h1" type="number" value="10" min="1" step="0.1" class="border border-slate-300 rounded px-2 py-1.5 text-sm w-24"/>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-600 mb-1">v₁ (m/s)</label>
-        <input id="v1" type="number" value="17.56" min="0.1" step="0.01" class="border border-slate-300 rounded px-2 py-1.5 text-sm w-28"/>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-600 mb-1">z₀ (m)</label>
-        <select id="z0" class="border border-slate-300 rounded px-2 py-1.5 text-sm min-w-[220px]"></select>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-600 mb-1">Pressure factor</label>
-        <input id="pf" type="number" value="1" min="0.1" step="0.05" class="border border-slate-300 rounded px-2 py-1.5 text-sm w-20"/>
+        <p class="text-[10px] text-slate-500 mt-1.5">Unique per participant. Paste into Grasshopper <code class="bg-slate-100 px-1 rounded">Session_ID</code>. GhPython can open <code class="bg-slate-100 px-1 rounded">?session=…</code> after send.</p>
       </div>
       <div class="flex flex-wrap gap-2 items-center">
-        <button type="button" id="btnSaveWind" class="rounded-md bg-indigo-700 text-white text-sm font-medium px-3 py-2 hover:bg-indigo-800" title="Save v₁, h₁, z₀, pressure factor to the server for this session">Save wind to server</button>
-        <button type="button" id="btnSendDemo" class="rounded-md bg-teal-700 text-white text-sm font-medium px-3 py-2 hover:bg-teal-800">Send demo panels (mixed tri/quad)</button>
-        <button type="button" id="btnCalculate" class="rounded-md bg-slate-800 text-white text-sm font-medium px-3 py-2 hover:bg-slate-900">Calculate thicknesses &amp; clusters</button>
-        <button type="button" id="btnRedrawWind" class="rounded-md border border-slate-300 bg-white text-sm px-3 py-2 hover:bg-slate-50">Redraw wind chart</button>
-        <button type="button" id="btnQuickAnalyze" class="rounded-md border border-teal-600 text-teal-800 text-sm px-3 py-2 hover:bg-teal-50">Quick analyze (no session)</button>
+        <button type="button" id="btnSaveWind" class="rounded-lg bg-[#4865bd] text-white text-sm font-medium px-4 py-2.5 hover:bg-[#3d56a3] shadow-sm" title="Save wind to server for this session">Save wind</button>
+        <button type="button" id="btnSendDemo" class="rounded-lg bg-[#6b7fc9] text-white text-sm font-medium px-4 py-2.5 hover:bg-[#5a6eb8] shadow-sm">Demo panels</button>
+        <button type="button" id="btnCalculate" class="rounded-lg bg-[#4865bd] text-white text-sm font-medium px-4 py-2.5 hover:bg-[#3d56a3] shadow-sm">Calculate</button>
+        <button type="button" id="btnRedrawWind" class="rounded-lg border border-slate-300 bg-white text-slate-700 text-sm px-4 py-2.5 hover:bg-slate-50">Redraw chart</button>
+        <button type="button" id="btnQuickAnalyze" class="rounded-lg border border-[#cbd5e1] bg-[#eef1f8] text-[#4865bd] text-sm font-medium px-4 py-2.5 hover:bg-[#e2e8f4]">Quick analyze</button>
       </div>
     </div>
-    <p class="text-xs text-slate-600 mb-4 -mt-2 px-1 max-w-4xl">
-      <strong>Wind</strong> is configured only here (not in Grasshopper). Click <strong>Save wind to server</strong> before <strong>Calculate</strong>, or use <strong>Calculate</strong> after demo send — it saves wind automatically. Grasshopper sends only <strong>Panel_Tree</strong> (+ optional <code class="bg-slate-100 px-1 rounded text-[11px]">Session_ID</code>).
+    <p class="text-xs text-slate-600 mb-4 px-1 max-w-4xl">
+      <strong>Wind</strong> is set in <strong>panel 2</strong> (not Grasshopper). <strong>Calculate</strong> saves wind automatically. Grasshopper sends <strong>Panel_Tree</strong> (+ optional <code class="bg-slate-100 px-1 rounded text-[11px]">Session_ID</code>).
     </p>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <!-- 1: 3D -->
-      <section class="bg-white rounded-lg border border-slate-200 shadow-sm p-3 flex flex-col min-h-[320px]">
+      <section class="bg-white rounded-xl border border-slate-200/90 shadow-sm p-4 flex flex-col min-h-[320px]">
         <h2 class="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2 mb-2">1 — Panel geometry (3D)</h2>
         <p class="text-xs text-slate-500 mb-2">After calculation, panels are colored by thickness cluster. Orbit: left drag; zoom: wheel.</p>
-        <div id="view3d" class="flex-1 min-h-[280px] rounded bg-slate-900 relative"></div>
+        <div id="view3d" class="flex-1 min-h-[280px] rounded-lg border border-slate-200 bg-white relative shadow-inner"></div>
         <p id="view3dHint" class="text-xs text-amber-700 mt-2">Send a session from Grasshopper or use “Send demo panels”, then calculate.</p>
       </section>
 
       <!-- 2: Wind -->
-      <section class="bg-white rounded-lg border border-slate-200 shadow-sm p-3 flex flex-col min-h-[320px]">
-        <h2 class="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2 mb-2">2 — Wind profile (logarithmic)</h2>
-        <p class="text-xs text-slate-500 mb-2">Curves for each roughness class; thick line = selected z₀. Educational vertical profile only.</p>
-        <div class="flex-1 min-h-[260px]"><canvas id="chartWind"></canvas></div>
-        <img id="terrainRef" class="mt-2 max-h-32 rounded border border-slate-200 hidden" alt="Terrain reference"/>
+      <section class="bg-white rounded-xl border border-slate-200/90 shadow-sm p-4 flex flex-col min-h-[380px]">
+        <h2 class="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2 mb-3">2 — Wind profile (logarithmic)</h2>
+        <p class="text-xs text-slate-500 mb-3">Logarithmic vertical profile (same idea as wind-data.ch). Each line = terrain roughness class; <strong class="text-[#4865bd]">emphasized</strong> = current z₀.</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 mb-4 p-3 rounded-lg bg-[#f8fafc] border border-slate-200/80">
+          <div class="min-w-0">
+            <label class="block text-[11px] font-semibold text-slate-600 mb-1">Region preset</label>
+            <select id="regionPreset" class="w-full border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white"></select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-600 mb-1">h₁ reference height (m)</label>
+            <input id="h1" type="number" value="10" min="1" step="0.1" class="w-full border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white"/>
+          </div>
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-600 mb-1">v₁ at h₁ (m/s)</label>
+            <input id="v1" type="number" value="17.56" min="0.1" step="0.01" class="w-full border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white"/>
+          </div>
+          <div class="min-w-0">
+            <label class="block text-[11px] font-semibold text-slate-600 mb-1">Roughness z₀</label>
+            <select id="z0" class="w-full border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white min-w-0"></select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-600 mb-1">Pressure factor</label>
+            <input id="pf" type="number" value="1" min="0.1" step="0.05" class="w-full border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white"/>
+          </div>
+        </div>
+        <div class="relative w-full h-[280px] mb-2"><canvas id="chartWind" class="max-h-[280px]"></canvas></div>
+        <p id="windChartHint" class="text-[11px] text-slate-500 mb-2">Height on horizontal axis; wind speed on vertical axis.</p>
+        <img id="terrainRef" class="mt-1 max-h-28 rounded-lg border border-slate-200 hidden object-contain" alt="Terrain reference"/>
       </section>
 
       <!-- 3: ML -->
-      <section class="bg-white rounded-lg border border-slate-200 shadow-sm p-3 flex flex-col min-h-[300px]">
+      <section class="bg-white rounded-xl border border-slate-200/90 shadow-sm p-4 flex flex-col min-h-[300px]">
         <h2 class="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2 mb-2">3 — Oracle vs ML</h2>
         <p class="text-xs text-slate-500 mb-2">Scatter: design pressure vs load resistance. Bars: feature weights (teaching visualization).</p>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 flex-1">
@@ -109,7 +146,7 @@
       </section>
 
       <!-- 4: Results -->
-      <section class="bg-white rounded-lg border border-slate-200 shadow-sm p-3 flex flex-col min-h-[300px]">
+      <section class="bg-white rounded-xl border border-slate-200/90 shadow-sm p-4 flex flex-col min-h-[300px]">
         <h2 class="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2 mb-2">4 — Clusters &amp; thickness (Table 4 min. mm)</h2>
         <p class="text-xs text-slate-500 mb-2">Panels grouped by governing nominal from oracle scan; thickness = minimum per Table 4 mapping.</p>
         <div id="clusterChips" class="flex flex-wrap gap-2 mb-2 min-h-[2rem]"></div>
@@ -134,7 +171,7 @@
       const w = container.clientWidth || 400;
       const h = container.clientHeight || 280;
       scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x0f172a);
+      scene.background = new THREE.Color(0xffffff);
       camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 500);
       camera.position.set(4, 3, 6);
       renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -144,13 +181,13 @@
       container.appendChild(renderer.domElement);
       controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
-      scene.add(new THREE.AmbientLight(0xffffff, 0.65));
-      const d = new THREE.DirectionalLight(0xffffff, 0.9);
+      scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+      const d = new THREE.DirectionalLight(0xffffff, 0.75);
       d.position.set(5, 10, 7);
       scene.add(d);
       panelGroup = new THREE.Group();
       scene.add(panelGroup);
-      const grid = new THREE.GridHelper(12, 12, 0x334155, 0x1e293b);
+      const grid = new THREE.GridHelper(12, 24, 0xb8c4d4, 0xdbe4ee);
       grid.position.y = -0.01;
       scene.add(grid);
       function tick() {
@@ -232,7 +269,7 @@
       { label: 'Dense city', v1: 15, z0: 1.6 }
     ];
 
-    const PALETTE = ['#1e3a5f','#2e7d8f','#2d8f5c','#8faa3c','#c9a227','#c17f2a','#b85c38','#a84848','#8b3d8b','#5c4a7a'];
+    const PALETTE = ['#4865bd','#5f75c4','#7686cc','#8d97d4','#a4a8dc','#b8bae3','#c9cbe9','#d6d8ef','#dfe3f4'];
     const api = () => window.location.origin;
     const LS_SESSION = 'mlfacade_session_id';
 
@@ -314,14 +351,17 @@
         const z0 = r.z0;
         const speeds = heights.map((h) => vAtHeight(v1, h1, h, z0));
         const selected = Math.abs(z0 - selectedZ0) < 1e-9;
+        const col = PALETTE[i % PALETTE.length];
         return {
-          label: `Class ${r.class} (z₀=${z0})`,
-          data: speeds.map((s, j) => ({ x: s, y: heights[j] })),
-          borderColor: PALETTE[i % PALETTE.length],
+          label: `Class ${r.class} · z₀ = ${z0} m`,
+          data: heights.map((h, j) => ({ x: h, y: speeds[j] })),
+          borderColor: col,
           backgroundColor: 'transparent',
-          borderWidth: selected ? 3 : 1,
+          borderWidth: selected ? 3 : 1.5,
           pointRadius: 0,
-          tension: 0.15
+          pointHoverRadius: 4,
+          fill: false,
+          tension: 0.2
         };
       });
       return { heights, datasets };
@@ -336,15 +376,54 @@
         data: { datasets },
         options: {
           maintainAspectRatio: false,
-          indexAxis: 'y',
+          responsive: true,
+          interaction: { mode: 'nearest', intersect: false, axis: 'x' },
           parsing: false,
           scales: {
-            x: { title: { display: true, text: 'Wind speed (m/s)' }, beginAtZero: true },
-            y: { title: { display: true, text: 'Height (m)' }, min: 0 }
+            x: {
+              title: { display: true, text: 'Height above ground h (m)', color: '#64748b', font: { size: 12, weight: '600' } },
+              min: 0,
+              grid: { color: 'rgba(72,101,189,0.08)' },
+              ticks: { color: '#64748b' }
+            },
+            y: {
+              title: { display: true, text: 'Wind speed v(h) (m/s)', color: '#64748b', font: { size: 12, weight: '600' } },
+              beginAtZero: true,
+              grid: { color: 'rgba(72,101,189,0.08)' },
+              ticks: { color: '#64748b' }
+            }
           },
           plugins: {
-            legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 9 } } },
-            title: { display: true, text: 'v(h) for each z₀ (thick = selected)', font: { size: 11 } }
+            legend: {
+              position: 'bottom',
+              align: 'start',
+              maxHeight: 120,
+              labels: {
+                boxWidth: 36,
+                boxHeight: 2,
+                padding: 12,
+                usePointStyle: true,
+                pointStyle: 'line',
+                font: { size: 10, family: "system-ui, Segoe UI, sans-serif" },
+                color: '#475569'
+              }
+            },
+            title: {
+              display: true,
+              text: 'Log profile: v(h) for each roughness z₀ (thicker = selected)',
+              font: { size: 13, weight: '600', family: "system-ui, Segoe UI, sans-serif" },
+              color: '#334155',
+              padding: { bottom: 8 }
+            },
+            tooltip: {
+              callbacks: {
+                label: (item) => {
+                  const h = item.parsed.x;
+                  const v = item.parsed.y;
+                  return ` h = ${h} m → v = ${v != null ? v.toFixed(2) : '—'} m/s`;
+                }
+              }
+            }
           }
         }
       });
@@ -573,12 +652,18 @@
       drawWindMulti(v1, h1, z0);
     });
 
-    document.getElementById('z0').addEventListener('change', () => {
+    function redrawWindFromForm() {
       const h1 = parseFloat(document.getElementById('h1').value, 10);
       const v1 = parseFloat(document.getElementById('v1').value, 10);
       const z0 = parseFloat(document.getElementById('z0').value, 10);
-      drawWindMulti(v1, h1, z0);
-    });
+      if (Number.isFinite(h1) && Number.isFinite(v1) && Number.isFinite(z0)) {
+        drawWindMulti(v1, h1, z0);
+      }
+    }
+
+    document.getElementById('z0').addEventListener('change', redrawWindFromForm);
+    document.getElementById('h1').addEventListener('change', redrawWindFromForm);
+    document.getElementById('v1').addEventListener('change', redrawWindFromForm);
 
     document.getElementById('sessionId').addEventListener('change', () => {
       const v = document.getElementById('sessionId').value.trim();
@@ -603,12 +688,7 @@
     };
     document.getElementById('btnSendDemo').onclick = sendDemo;
     document.getElementById('btnCalculate').onclick = calculateSession;
-    document.getElementById('btnRedrawWind').onclick = () => {
-      const h1 = parseFloat(document.getElementById('h1').value, 10);
-      const v1 = parseFloat(document.getElementById('v1').value, 10);
-      const z0 = parseFloat(document.getElementById('z0').value, 10);
-      drawWindMulti(v1, h1, z0);
-    };
+    document.getElementById('btnRedrawWind').onclick = () => redrawWindFromForm();
     document.getElementById('btnQuickAnalyze').onclick = quickAnalyze;
 
     initSessionId();

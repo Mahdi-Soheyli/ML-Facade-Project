@@ -6,7 +6,10 @@
 #
 # Inputs:
 #   Run          — bool (True = send once; use a button/latch to avoid repeat posts)
-#   Session_ID   — str, optional (copy from web app). If empty, server returns a new id in Message.
+#   Session_ID   — str, optional. Use a unique value per participant (e.g. your name) so sessions
+#                  stay independent. If empty, the server creates an id (see Message JSON).
+#   Open_Browser — bool (default True). If True and the POST succeeds, opens the dashboard in your
+#                  default browser with ?session=… so you can set wind and calculate.
 #   Panel_Tree   — DataTree: one branch per panel. Flat list per branch, in this order:
 #                    • n edge lengths (floats) — n = 3 for triangle, n = 4 for quad
 #                    • 1 normal — Vector3d (outward)
@@ -18,10 +21,12 @@
 #   OK           — bool
 #   Status       — int HTTP status
 #   Message      — str (JSON; includes session_id)
+#   Opened_URL   — str URL opened in the browser, or empty
 
 from __future__ import division
 
 import json
+import sys
 
 try:
     import urllib2 as urllib_request
@@ -42,6 +47,38 @@ except ImportError:
 
 # Public Railway URL (no trailing slash)
 API_BASE = "https://ml-facade-project-production.up.railway.app"
+
+
+def _quote_session(s):
+    try:
+        from urllib.parse import quote
+
+        return quote(str(s), safe="")
+    except ImportError:
+        from urllib import quote
+
+        if sys.version_info[0] < 3:
+            return quote(str(s).encode("utf-8"))
+        return quote(str(s), safe="")
+
+
+def _open_browser(url):
+    if not url:
+        return
+    try:
+        import webbrowser
+
+        webbrowser.open(url)
+        return
+    except Exception:
+        pass
+    try:
+        import os
+
+        if os.name == "nt":
+            os.startfile(url)
+    except Exception:
+        pass
 
 
 def _num(x):
@@ -197,20 +234,22 @@ def _branch_to_panel(items, pid):
 
 def main():
     Run = True
+    Open_Browser = True
     Session_ID = ""
     Panel_Tree = None
 
     g = globals()
     Run = g.get("Run", Run)
+    Open_Browser = bool(g.get("Open_Browser", Open_Browser))
     sid = g.get("Session_ID", Session_ID)
     Session_ID = str(sid).strip() if sid is not None else ""
     Panel_Tree = g.get("Panel_Tree", Panel_Tree)
 
     if not Run:
-        return False, 0, "skipped (Run is False)"
+        return False, 0, "skipped (Run is False)", ""
 
     if Panel_Tree is None:
-        return False, 0, "Panel_Tree is empty"
+        return False, 0, "Panel_Tree is empty", ""
 
     panels = []
     if DataTree is not None and isinstance(Panel_Tree, DataTree):
@@ -224,7 +263,7 @@ def main():
                 continue
             panels.append(pdat)
     else:
-        return False, 0, "Panel_Tree must be a Grasshopper DataTree"
+        return False, 0, "Panel_Tree must be a Grasshopper DataTree", ""
 
     if not panels:
         return (
@@ -232,6 +271,7 @@ def main():
             0,
             "no panels extracted. Expected each branch: "
             "n edge floats, then normal (Vector3d), then n Point3d, then optional Surface.",
+            "",
         )
 
     body = {"panels": panels}
@@ -241,16 +281,26 @@ def main():
     url = API_BASE + "/api/session"
     data = json.dumps(body).encode("utf-8")
     req = urllib_request.Request(url, data=data, headers={"Content-Type": "application/json"})
+    opened = ""
     try:
         resp = urllib_request.urlopen(req, timeout=120)
         status = resp.getcode()
         txt = resp.read().decode("utf-8")
-        return True, status, txt
+        if Open_Browser and status == 200:
+            try:
+                j = json.loads(txt)
+                sid_final = Session_ID or j.get("session_id", "")
+                if sid_final:
+                    opened = API_BASE + "/?session=" + _quote_session(sid_final)
+                    _open_browser(opened)
+            except Exception:
+                pass
+        return True, status, txt, opened
     except urllib_error.HTTPError as e:
         err = e.read().decode("utf-8", errors="replace")
-        return False, e.code, err
+        return False, e.code, err, ""
     except Exception as ex:
-        return False, 0, str(ex)
+        return False, 0, str(ex), ""
 
 
-OK, Status, Message = main()
+OK, Status, Message, Opened_URL = main()

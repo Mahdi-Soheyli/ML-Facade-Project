@@ -26,7 +26,7 @@ Do these in order. You do **not** need to run the app on localhost first if you 
    - **Root directory**: `/` or leave empty (repo root). Only change this if the app lived in a subfolder.
 
 6. **Leave the start command empty** in Railway if possible. This image already defines:
-   - `CMD` → `uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}`  
+   - `CMD` → `uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}`  
    If Railway shows a custom start command, it should match that idea and **must** bind `0.0.0.0` and use `$PORT`.
 
 7. **Deploy**: trigger a deploy (push to the connected branch, or **Deploy** → **Redeploy**). Watch the build logs until the image runs.
