@@ -1,0 +1,11 @@
+# Minimal install to run: python scripts/train_ml.py
+# (train_ml imports app.oracle_panel -> pydantic schemas; numpy for the bundle.)
+#
+#   python -m pip install -r requirements-train.txt
+#   python scripts/train_ml.py
+#
+# For the same stack as Docker/Railway (numpy pinned <2), use:
+#   python -m pip install -r requirements.txt
+#
+numpy>=1.22
+pydantic>=2.5

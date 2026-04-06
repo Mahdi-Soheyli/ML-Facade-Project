@@ -90,9 +90,20 @@ Commit and redeploy. The dashboard loads it automatically; if the file is missin
 
 ## Regenerate ML bundle (local or CI)
 
+Install dependencies from the repo root (same shell you use to run Python):
+
 ```bash
+python -m pip install -r requirements.txt
+# minimal training only (numpy + pydantic — enough for scripts/train_ml.py):
+python -m pip install -r requirements-train.txt
 python scripts/train_ml.py
 ```
+
+If you see `ModuleNotFoundError` for `numpy` or `pydantic`, install into the **same** interpreter you use to run the script (Windows Store Python, conda base, etc.).
+
+### “Application failed to respond” on Railway
+
+Open the service **Deploy logs** in Railway. Typical causes: failed Docker build, crash on import (missing file in image), or process exiting. Confirm the build uses this repo’s **Dockerfile** and the latest commit deployed successfully.
 
 Commit `models/ml_bundle.npz` + `models/ml_meta.json` or bake them into the image after training in CI.
 

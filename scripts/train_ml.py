@@ -1,7 +1,18 @@
 """
 Train KNN memory bank + LR targets from oracle labels (NumPy only — no sklearn).
 
-Run from repo root: python scripts/train_ml.py
+Run from repo root:
+  python scripts/train_ml.py
+
+Install deps (pick one):
+  python -m pip install -r requirements-train.txt
+  # or full project deps (matches Docker / Railway, pins numpy<2):
+  python -m pip install -r requirements.txt
+
+Use the **same** `python` for `pip install` and for `python scripts/train_ml.py` (e.g. VS Code’s
+interpreter, conda, or Windows Store Python). If you see `ModuleNotFoundError` for numpy or
+pydantic, install requirements-train into that interpreter.
+
 Outputs: models/ml_bundle.npz, models/ml_meta.json
 """
 
