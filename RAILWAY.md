@@ -103,7 +103,15 @@ If you see `ModuleNotFoundError` for `numpy` or `pydantic`, install into the **s
 
 ### “Application failed to respond” on Railway
 
-Open the service **Deploy logs** in Railway. Typical causes: failed Docker build, crash on import (missing file in image), or process exiting. Confirm the build uses this repo’s **Dockerfile** and the latest commit deployed successfully.
+1. **Health check** — This repo exposes **`GET /health`** (200 + JSON). The root **`railway.toml`** sets `healthcheckPath = "/health"`. In the Railway dashboard, under the service, set **Healthcheck path** to **`/health`** (or rely on the file after redeploy). If a healthcheck was set to a path that never returns 200, traffic may not switch to the new deployment.
+
+2. **Public networking** — Service → **Settings** → **Networking** → generate a **public domain** (or confirm the URL targets **this** service).
+
+3. **Port** — The container must listen on **`$PORT`** (Railway sets it, often `8080`). The Dockerfile uses `uvicorn ... --port ${PORT:-8000}`.
+
+4. **Logs** — If deploy logs show `Uvicorn running on http://0.0.0.0:8080` but the site still fails, open **Deploy logs** for errors *after* startup, and try `curl -I https://<your-domain>/health` from your machine.
+
+5. **Hostname allowlists** — If you add middleware that filters by `Host`, allow **`healthcheck.railway.app`** (Railway’s healthcheck hostname).
 
 Commit `models/ml_bundle.npz` + `models/ml_meta.json` or bake them into the image after training in CI.
 

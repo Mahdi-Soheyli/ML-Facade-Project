@@ -264,6 +264,12 @@ def analyze(req: AnalyzeRequest) -> AnalyzeResponse:
     return resp
 
 
+@app.get("/health")
+def health() -> dict[str, str]:
+    """Liveness probe for Railway (must return 200 quickly; used by healthcheckPath)."""
+    return {"status": "ok"}
+
+
 @app.get("/api/last")
 def api_last(session_id: str | None = None):
     key = session_id or "default"
