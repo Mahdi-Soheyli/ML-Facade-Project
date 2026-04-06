@@ -220,6 +220,13 @@ class SessionResultsResponse(BaseModel):
     analyze: dict[str, Any] | None = None
 
 
+class SessionGeometryResponse(BaseModel):
+    ok: bool = True
+    session_id: str
+    panel_count: int
+    panels: list[dict[str, Any]]
+
+
 class LastResultStore(BaseModel):
     """Shape for GET /api/last (in-memory demo)."""
 

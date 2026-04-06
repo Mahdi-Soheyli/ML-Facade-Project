@@ -26,6 +26,7 @@ from app.schemas import (
     PanelInput,
     PanelResult,
     SessionCalculateRequest,
+    SessionGeometryResponse,
     SessionResultsResponse,
     SessionUploadRequest,
     SessionUploadResponse,
@@ -217,6 +218,38 @@ def session_calculate(
         response=resp.model_dump(),
     )
     return resp
+
+
+@app.get("/api/session/{session_id}/geometry", response_model=SessionGeometryResponse)
+def session_geometry(session_id: str) -> SessionGeometryResponse:
+    st = SESSIONS.get(session_id)
+    if st is None:
+        raise HTTPException(status_code=404, detail="session not found")
+    rows: list[dict[str, Any]] = []
+    cluster_by_id = {}
+    if st.clusters:
+        for c in st.clusters:
+            for pid in c.panel_ids:
+                cluster_by_id[pid] = c.color_hex
+    for p in st.panels:
+        if not p.vertices_m or not p.n_edges:
+            continue
+        rows.append(
+            {
+                "id": p.id,
+                "cluster_color_hex": cluster_by_id.get(p.id),
+                "input_geometry": {
+                    "n_edges": p.n_edges,
+                    "vertices_m": p.vertices_m,
+                    "normal": p.normal,
+                },
+            }
+        )
+    return SessionGeometryResponse(
+        session_id=session_id,
+        panel_count=len(rows),
+        panels=rows,
+    )
 
 
 @app.get("/api/session/{session_id}/results", response_model=SessionResultsResponse)

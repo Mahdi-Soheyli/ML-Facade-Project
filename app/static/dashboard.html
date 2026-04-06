@@ -161,6 +161,8 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
     let scene, camera, renderer, controls, panelGroup, gridHelper, axesHelper;
+    let panelBounds = null;
+    const panelMaterialCache = new Map();
 
     function hexToNum(hex) {
       if (!hex || hex[0] !== '#') return 0x64748b;
@@ -212,44 +214,26 @@
       if (renderer && scene && camera) renderer.render(scene, camera);
     }
 
-    function clearPanels() {
+    function disposePanelMaterials() {
+      for (const mat of panelMaterialCache.values()) mat.dispose();
+      panelMaterialCache.clear();
+    }
+
+    function clearPanels(shouldRender = true) {
       if (!panelGroup) return;
       while (panelGroup.children.length) {
         const o = panelGroup.children[0];
         if (o.geometry) o.geometry.dispose();
-        if (o.material) o.material.dispose();
         panelGroup.remove(o);
       }
-      renderThree();
-    }
-
-    function addPanelMesh(vertices_m, colorHex) {
-      const n = vertices_m.length;
-      if (n !== 3 && n !== 4) return;
-      const flat = new Float32Array(n * 3);
-      for (let i = 0; i < n; i++) {
-        flat[i * 3] = vertices_m[i][0];
-        flat[i * 3 + 1] = vertices_m[i][1];
-        flat[i * 3 + 2] = vertices_m[i][2];
-      }
-      const geom = new THREE.BufferGeometry();
-      geom.setAttribute('position', new THREE.BufferAttribute(flat, 3));
-      const idx = n === 3 ? [0, 1, 2] : [0, 1, 2, 0, 2, 3];
-      geom.setIndex(idx);
-      geom.computeVertexNormals();
-      const mat = new THREE.MeshPhongMaterial({
-        color: hexToNum(colorHex),
-        side: THREE.DoubleSide,
-        shininess: 20,
-        flatShading: true,
-      });
-      const mesh = new THREE.Mesh(geom, mat);
-      panelGroup.add(mesh);
+      disposePanelMaterials();
+      panelBounds = null;
+      if (shouldRender) renderThree();
     }
 
     function fitCameraToPanels() {
       if (!panelGroup || !camera || !controls) return;
-      if (!panelGroup.children.length) {
+      if (!panelGroup.children.length || !panelBounds) {
         controls.target.set(0, 0, 0);
         camera.position.set(4, 3, 6);
         if (gridHelper) {
@@ -261,9 +245,16 @@
         renderThree();
         return;
       }
-      const box = new THREE.Box3().setFromObject(panelGroup);
-      const size = box.getSize(new THREE.Vector3());
-      const center = box.getCenter(new THREE.Vector3());
+      const size = new THREE.Vector3(
+        panelBounds.max.x - panelBounds.min.x,
+        panelBounds.max.y - panelBounds.min.y,
+        panelBounds.max.z - panelBounds.min.z
+      );
+      const center = new THREE.Vector3(
+        (panelBounds.min.x + panelBounds.max.x) * 0.5,
+        (panelBounds.min.y + panelBounds.max.y) * 0.5,
+        (panelBounds.min.z + panelBounds.max.z) * 0.5
+      );
       const maxDim = Math.max(size.x, size.y, size.z, 1);
       const fov = camera.fov * (Math.PI / 180);
       const distance = Math.max((maxDim / 2) / Math.tan(fov / 2) * 1.35, maxDim * 0.95, 3);
@@ -271,6 +262,8 @@
       camera.far = Math.max(500, maxDim * 20);
       camera.updateProjectionMatrix();
       controls.target.copy(center);
+      controls.minDistance = Math.max(maxDim * 0.1, 0.25);
+      controls.maxDistance = Math.max(maxDim * 12, 50);
       camera.position.set(
         center.x + distance * 0.85,
         center.y - distance * 0.85,
@@ -279,7 +272,7 @@
       if (gridHelper) {
         const gridScale = Math.max(1, maxDim / 16);
         gridHelper.scale.setScalar(gridScale);
-        gridHelper.position.z = box.min.z - Math.max(maxDim * 0.01, 0.01);
+        gridHelper.position.z = panelBounds.min.z - Math.max(maxDim * 0.01, 0.01);
       }
       if (axesHelper) {
         axesHelper.position.copy(center);
@@ -289,8 +282,84 @@
       renderThree();
     }
 
+    function getPanelMaterial(colorHex) {
+      const key = colorHex || '#94a3b8';
+      if (!panelMaterialCache.has(key)) {
+        panelMaterialCache.set(key, new THREE.MeshPhongMaterial({
+          color: hexToNum(key),
+          side: THREE.DoubleSide,
+          shininess: 20,
+          flatShading: true,
+        }));
+      }
+      return panelMaterialCache.get(key);
+    }
+
+    function appendBounds(bounds, x, y, z) {
+      bounds.min.x = Math.min(bounds.min.x, x);
+      bounds.min.y = Math.min(bounds.min.y, y);
+      bounds.min.z = Math.min(bounds.min.z, z);
+      bounds.max.x = Math.max(bounds.max.x, x);
+      bounds.max.y = Math.max(bounds.max.y, y);
+      bounds.max.z = Math.max(bounds.max.z, z);
+    }
+
+    function renderMergedPanels(rows) {
+      clearPanels(false);
+      if (!rows || !rows.length) {
+        renderThree();
+        return;
+      }
+      const buckets = new Map();
+      const bounds = {
+        min: new THREE.Vector3(Infinity, Infinity, Infinity),
+        max: new THREE.Vector3(-Infinity, -Infinity, -Infinity),
+      };
+      let validCount = 0;
+      for (const row of rows) {
+        const g = row && row.input_geometry ? row.input_geometry : row;
+        const vertices = g && g.vertices_m;
+        const n = g && g.n_edges ? g.n_edges : (vertices ? vertices.length : 0);
+        if (!vertices || (n !== 3 && n !== 4)) continue;
+        const colorHex = row.cluster_color_hex || row.colorHex || '#94a3b8';
+        if (!buckets.has(colorHex)) {
+          buckets.set(colorHex, { positions: [], indices: [] });
+        }
+        const bucket = buckets.get(colorHex);
+        const base = bucket.positions.length / 3;
+        for (const pt of vertices) {
+          if (!pt || pt.length < 3) continue;
+          const x = Number(pt[0]);
+          const y = Number(pt[1]);
+          const z = Number(pt[2]);
+          bucket.positions.push(x, y, z);
+          appendBounds(bounds, x, y, z);
+        }
+        if (n === 3) bucket.indices.push(base, base + 1, base + 2);
+        else bucket.indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+        validCount += 1;
+      }
+      if (!validCount) {
+        panelBounds = null;
+        renderThree();
+        return;
+      }
+      for (const [colorHex, bucket] of buckets.entries()) {
+        if (!bucket.positions.length || !bucket.indices.length) continue;
+        const geom = new THREE.BufferGeometry();
+        geom.setAttribute('position', new THREE.Float32BufferAttribute(bucket.positions, 3));
+        geom.setIndex(bucket.indices);
+        geom.computeVertexNormals();
+        const mesh = new THREE.Mesh(geom, getPanelMaterial(colorHex));
+        panelGroup.add(mesh);
+      }
+      panelBounds = bounds;
+      fitCameraToPanels();
+    }
+
     window.__threeClear = clearPanels;
-    window.__threeAddPanel = addPanelMesh;
+    window.__threeRenderPanels = renderMergedPanels;
+    window.__threeFitCamera = fitCameraToPanels;
     window.addEventListener('DOMContentLoaded', () => {
       initThree(document.getElementById('view3d'));
     });
@@ -623,21 +692,44 @@
       }
     }
 
+    function renderThreeRows(rows, emptyHint) {
+      if (!window.__threeRenderPanels) return;
+      window.__threeRenderPanels(rows || []);
+      if (!rows || !rows.length) {
+        document.getElementById('view3dHint').textContent = emptyHint || 'No vertex geometry available.';
+      }
+    }
+
     function updateThreeFromResults(data) {
       document.getElementById('view3dHint').textContent = '';
-      if (!window.__threeClear) return;
-      window.__threeClear();
       const panels = data.panels || [];
-      for (const p of panels) {
-        const g = p.input_geometry;
-        if (g && g.vertices_m && g.n_edges) {
-          window.__threeAddPanel(g.vertices_m, p.cluster_color_hex || '#94a3b8');
+      const rows = panels.filter((p) => p.input_geometry && p.input_geometry.vertices_m && p.input_geometry.n_edges);
+      renderThreeRows(rows, 'No vertex geometry in session (use “Send demo” or Grasshopper sender).');
+    }
+
+    async function loadSessionGeometryPreview(sid, showHintWhenMissing = false) {
+      if (!sid) return false;
+      try {
+        const r = await fetch(api() + '/api/session/' + encodeURIComponent(sid) + '/geometry');
+        if (!r.ok) {
+          if (showHintWhenMissing) {
+            renderThreeRows([], 'Send a session from Grasshopper or use “Demo panels”, then calculate.');
+          }
+          return false;
         }
+        const data = await r.json();
+        const rows = (data.panels || []).filter((p) => p.input_geometry && p.input_geometry.vertices_m && p.input_geometry.n_edges);
+        if (rows.length) {
+          document.getElementById('view3dHint').textContent = 'Session geometry preview loaded. Run “Calculate” to color by cluster.';
+          renderThreeRows(rows, 'No vertex geometry in session.');
+          return true;
+        }
+      } catch (_err) {
       }
-      fitCameraToPanels();
-      if (!panels.some((p) => p.input_geometry)) {
-        document.getElementById('view3dHint').textContent = 'No vertex geometry in session (use “Send demo” or Grasshopper sender).';
+      if (showHintWhenMissing) {
+        renderThreeRows([], 'Send a session from Grasshopper or use “Demo panels”, then calculate.');
       }
+      return false;
     }
 
     async function sendDemo() {
@@ -649,7 +741,7 @@
       const data = await r.json();
       if (!r.ok) { alert(JSON.stringify(data)); return; }
       document.getElementById('raw').textContent = JSON.stringify(data, null, 2);
-      document.getElementById('view3dHint').textContent = 'Session uploaded. Run “Calculate” to analyze and color panels.';
+      await loadSessionGeometryPreview(sid, true);
     }
 
     async function calculateSession() {
@@ -742,12 +834,16 @@
 
     document.getElementById('sessionId').addEventListener('change', () => {
       const v = document.getElementById('sessionId').value.trim();
-      if (v) localStorage.setItem(LS_SESSION, v);
+      if (v) {
+        localStorage.setItem(LS_SESSION, v);
+        loadSessionGeometryPreview(v, true);
+      }
     });
     document.getElementById('btnNewSession').onclick = () => {
       const s = crypto.randomUUID();
       localStorage.setItem(LS_SESSION, s);
       document.getElementById('sessionId').value = s;
+      renderThreeRows([], 'New session. Send geometry from Grasshopper or use “Demo panels”.');
     };
     document.getElementById('btnCopySession').onclick = async () => {
       const v = document.getElementById('sessionId').value.trim();
@@ -773,6 +869,7 @@
     fillRoughness();
     fillRegions();
     redrawWindFromForm();
+    loadSessionGeometryPreview(document.getElementById('sessionId').value.trim(), true);
 
     (function terrainImg() {
       const img = document.getElementById('terrainRef');
