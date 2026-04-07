@@ -158,6 +158,10 @@ class SessionUploadResponse(BaseModel):
 
 class SessionCalculateRequest(BaseModel):
     wind: WindParams | None = None
+    algorithms: list[str] | None = Field(
+        None,
+        description="Strategy IDs to run (e.g. ['knn_k7','ridge','svr']). None = all registered.",
+    )
 
 
 class WindDerived(BaseModel):

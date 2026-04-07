@@ -25,5 +25,6 @@
     "v_at_panel_m_s"
   ],
   "knn_k": 7,
-  "backend": "numpy_knn"
+  "backend": "multi_algorithm",
+  "kmeans_n_clusters": 6
 }

@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.clustering import build_clusters
-from app.ml_predict import load_registry, predict_ml_row
+from app.ml_predict import load_registry, load_sklearn_models, predict_by_algorithm, predict_ml_row
 from app.oracle_panel import run_oracle_panel
 from app.schemas import (
     AnalyzeRequest,
@@ -56,6 +56,7 @@ async def _lifespan(app: FastAPI):
     from app.ml_predict import load_models
 
     load_models()
+    load_sklearn_models()
     load_registry()
     yield
 
@@ -80,21 +81,27 @@ def _features(panel: PanelInput, wind: WindParams, design_kpa: float) -> list[fl
     return [s, ell, ar, design_kpa, panel.elevation_m, wind.z0_m, v2]
 
 
-def _ml_for_features(feats: list[float]) -> tuple[MLResult, dict[str, MLResult]]:
+def _ml_for_features(
+    feats: list[float],
+    algorithm_ids: list[str] | None = None,
+) -> tuple[MLResult, dict[str, MLResult]]:
     reg = load_registry()
+    strategies = reg.get("strategies", [])
+    if algorithm_ids is not None:
+        id_set = set(algorithm_ids)
+        strategies = [s for s in strategies if s["id"] in id_set]
     by_id: dict[str, MLResult] = {}
-    for s in reg.get("strategies", []):
+    for s in strategies:
         sid = s["id"]
-        kk = int(s["knn_k"])
         label = str(s.get("label", sid))
-        pn, lr_ml, imp = predict_ml_row(feats, knn_k=kk)
+        pn, lr_ml, imp, backend = predict_by_algorithm(feats, s)
         by_id[sid] = MLResult(
             strategy_id=sid,
             strategy_label=label,
-            predicted_nominal_key=pn,
+            predicted_nominal_key=str(pn) if pn is not None else None,
             predicted_governing_LR_kpa=lr_ml,
-            ml_backend="numpy_knn" if lr_ml is not None else None,
-            ml_available=lr_ml is not None,
+            ml_backend=backend if (lr_ml is not None or pn is not None) else None,
+            ml_available=(lr_ml is not None or pn is not None),
             feature_importance=imp,
         )
     default_id = reg.get("default_strategy_id") or ""
@@ -114,14 +121,18 @@ def _ml_for_features(feats: list[float]) -> tuple[MLResult, dict[str, MLResult]]
     return primary, by_id
 
 
-def _run_analyze(wind: WindParams, panels: list[PanelInput]) -> AnalyzeResponse:
+def _run_analyze(
+    wind: WindParams,
+    panels: list[PanelInput],
+    algorithm_ids: list[str] | None = None,
+) -> AnalyzeResponse:
     out: list[PanelResult] = []
     for p in panels:
         p = p.as_sized()
         v2, q_pa, design = design_pressure_kpa(wind, p.elevation_m)
         lr, ok, det, min_nk = run_oracle_panel(p, design)
         feats = _features(p, wind, design)
-        ml, ml_by = _ml_for_features(feats)
+        ml, ml_by = _ml_for_features(feats, algorithm_ids)
         out.append(
             PanelResult(
                 id=p.id,
@@ -206,9 +217,8 @@ def session_calculate(
     st = SESSIONS.get(session_id)
     if st is None:
         raise HTTPException(status_code=404, detail="session not found")
-    # Wind always comes from session (set in the web app via PUT .../wind).
     w = st.wind
-    resp = _run_analyze(w, st.panels)
+    resp = _run_analyze(w, st.panels, algorithm_ids=body.algorithms)
     st.analyze_response = resp
     pr_list = [p.model_dump() for p in resp.panels]
     st.clusters = build_clusters(pr_list)

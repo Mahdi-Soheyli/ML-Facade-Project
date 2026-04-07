@@ -3,18 +3,36 @@
   "strategies": [
     {
       "id": "knn_k3",
+      "type": "knn",
       "knn_k": 3,
-      "label": "k-NN k=3"
+      "label": "k-NN (k=3)"
     },
     {
       "id": "knn_k7",
+      "type": "knn",
       "knn_k": 7,
-      "label": "k-NN k=7"
+      "label": "k-NN (k=7)"
     },
     {
       "id": "knn_k15",
+      "type": "knn",
       "knn_k": 15,
-      "label": "k-NN k=15"
+      "label": "k-NN (k=15)"
+    },
+    {
+      "id": "ridge",
+      "type": "ridge",
+      "label": "Ridge Regression"
+    },
+    {
+      "id": "svr",
+      "type": "svr",
+      "label": "Support Vector Regression (SVR)"
+    },
+    {
+      "id": "kmeans",
+      "type": "kmeans",
+      "label": "K-Means Clustering"
     }
   ]
 }
