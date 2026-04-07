@@ -2,7 +2,7 @@
 Surrogate NFL (kPa) surfaces calibrated to Annex A3 anchor points.
 
 Charts in Annex A1 are the authoritative graphical method; this module provides
-a smooth calibrated surrogate for dataset generation (see DATASET.md).
+a smooth calibrated surrogate for dataset generation (see docs/DATASET.md).
 """
 
 from __future__ import annotations

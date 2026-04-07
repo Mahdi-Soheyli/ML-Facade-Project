@@ -1,4 +1,4 @@
-"""Generate E1300_Research_Dataset.csv using the ASTM E1300-24 oracle (see DATASET.md)."""
+"""Generate E1300_Research_Dataset.csv using the ASTM E1300-24 oracle (see docs/DATASET.md)."""
 
 from __future__ import annotations
 

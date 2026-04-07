@@ -1,5 +1,5 @@
 {
-  "comment": "Maps nominal glass designation keys to Annex A1 figure ids (E1300-24). NFL/deflection charts are raster images in the PDF; numeric lookup uses calibrated surrogate surfaces (see DATASET.md).",
+  "comment": "Maps nominal glass designation keys to Annex A1 figure ids (E1300-24). NFL/deflection charts are raster images in the PDF; numeric lookup uses calibrated surrogate surfaces (see docs/DATASET.md).",
   "monolithic_four_sides": {
     "2.0_picture": "A1.1",
     "2.5": "A1.2",
