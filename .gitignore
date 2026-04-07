@@ -1,5 +1,5 @@
 modeling_files/
-
+maintainer/
 # Python / tooling
 __pycache__/
 *.py[cod]
