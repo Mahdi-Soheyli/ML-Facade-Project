@@ -210,15 +210,11 @@
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div class="bg-white rounded-xl border border-slate-200 p-4 min-h-[320px]">
               <canvas id="chartScatter"></canvas>
-              <div id="scatterInsight" class="mt-3 rounded-lg border border-amber-100 bg-amber-50/70 p-3 text-xs text-amber-900">
-                Run a calculation to see data-driven chart insights for this view.
-              </div>
+              <div id="chartScatterInsight" class="mt-4 rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs text-slate-600 leading-5"></div>
             </div>
             <div class="bg-white rounded-xl border border-slate-200 p-4 min-h-[320px]">
               <canvas id="chartImp"></canvas>
-              <div id="impInsight" class="mt-3 rounded-lg border border-indigo-100 bg-indigo-50/70 p-3 text-xs text-indigo-900">
-                Feature insights appear after calculation.
-              </div>
+              <div id="chartImpInsight" class="mt-4 rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs text-slate-600 leading-5"></div>
             </div>
           </div>
         </div>
@@ -790,167 +786,167 @@
       return ALGO_COLORS[sid] || '#' + ((Math.random() * 0xFFFFFF) << 0).toString(16).padStart(6, '0');
     }
 
-    function setInsightHtml(id, html) {
-      const el = document.getElementById(id);
-      if (el) el.innerHTML = html;
+    function fmt(value, digits = 2) {
+      return Number.isFinite(value) ? value.toFixed(digits) : 'n/a';
     }
 
-    function fmt(v, digits = 3) {
-      return Number(v).toFixed(digits);
+    function mean(values) {
+      const clean = (values || []).filter(v => Number.isFinite(v));
+      if (!clean.length) return null;
+      return clean.reduce((sum, v) => sum + v, 0) / clean.length;
     }
 
-    function mean(arr) {
-      if (!arr.length) return null;
-      return arr.reduce((a, b) => a + b, 0) / arr.length;
-    }
-
-    function correlationXY(points) {
-      if (!points || points.length < 3) return null;
-      const xs = points.map(p => p.x);
-      const ys = points.map(p => p.y);
-      const xMean = mean(xs);
-      const yMean = mean(ys);
-      if (xMean == null || yMean == null) return null;
-      let num = 0, xDen = 0, yDen = 0;
-      for (let i = 0; i < points.length; i++) {
-        const dx = xs[i] - xMean;
-        const dy = ys[i] - yMean;
-        num += dx * dy;
-        xDen += dx * dx;
-        yDen += dy * dy;
+    function correlation(xs, ys) {
+      const pairs = [];
+      for (let i = 0; i < Math.min(xs.length, ys.length); i++) {
+        if (Number.isFinite(xs[i]) && Number.isFinite(ys[i])) pairs.push([xs[i], ys[i]]);
       }
-      const den = Math.sqrt(xDen * yDen);
-      if (!den) return null;
-      return num / den;
+      if (pairs.length < 2) return null;
+      const mx = mean(pairs.map(p => p[0]));
+      const my = mean(pairs.map(p => p[1]));
+      let num = 0, denX = 0, denY = 0;
+      for (const [x, y] of pairs) {
+        const dx = x - mx;
+        const dy = y - my;
+        num += dx * dy;
+        denX += dx * dx;
+        denY += dy * dy;
+      }
+      const den = Math.sqrt(denX * denY);
+      return den > 0 ? num / den : null;
     }
 
-    function summarizeModelErrors(panels) {
-      const p0 = panels && panels[0];
+    function trendText(value, noun) {
+      if (!Number.isFinite(value)) return `No clear ${noun} trend can be estimated from this session.`;
+      const dir = value > 0 ? 'increase' : 'decrease';
+      const strength = Math.abs(value) >= 0.7 ? 'a strong'
+        : Math.abs(value) >= 0.4 ? 'a moderate'
+        : Math.abs(value) >= 0.2 ? 'a weak'
+        : 'almost no';
+      if (strength === 'almost no') return `This session shows almost no ${noun} trend.`;
+      return `This session shows ${strength} ${noun} trend: load resistance tends to ${dir} as the x-axis value increases.`;
+    }
+
+    function setInsight(id, lines, emptyText) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const clean = (lines || []).filter(Boolean);
+      if (!clean.length) {
+        el.innerHTML = `<p>${emptyText || 'Run a session to see chart insights.'}</p>`;
+        return;
+      }
+      el.innerHTML = clean.map(line => `<p>${line}</p>`).join('');
+    }
+
+    function getStrategySummaries(panels) {
+      if (!panels || !panels.length) return [];
+      const p0 = panels[0];
       const byStrat = p0 && p0.ml_by_strategy && typeof p0.ml_by_strategy === 'object' ? p0.ml_by_strategy : null;
       if (!byStrat) return [];
-      const rows = [];
+
+      const summaries = [];
       for (const sid of Object.keys(byStrat)) {
         const label = byStrat[sid].strategy_label || sid;
-        const errors = [];
-        for (const p of panels) {
-          const pred = p.ml_by_strategy && p.ml_by_strategy[sid] && p.ml_by_strategy[sid].predicted_governing_LR_kpa;
+        const errors = panels.map(p => {
           const oracle = p.oracle && p.oracle.governing_LR_kpa;
-          if (Number.isFinite(pred) && Number.isFinite(oracle)) errors.push(Math.abs(pred - oracle));
-        }
-        if (errors.length) {
-          rows.push({ sid, label, mae: mean(errors), maxError: Math.max(...errors), n: errors.length });
-        }
+          const ml = p.ml_by_strategy && p.ml_by_strategy[sid] && p.ml_by_strategy[sid].predicted_governing_LR_kpa;
+          if (!Number.isFinite(oracle) || !Number.isFinite(ml)) return null;
+          return Math.abs(ml - oracle);
+        }).filter(v => Number.isFinite(v));
+        if (!errors.length) continue;
+        summaries.push({ sid, label, mae: mean(errors), maxError: Math.max(...errors) });
       }
-      rows.sort((a, b) => a.mae - b.mae);
-      return rows;
+      return summaries.sort((a, b) => a.mae - b.mae);
     }
 
     function updateScatterInsight(panels, chartType) {
       if (!panels || !panels.length) {
-        setInsightHtml('scatterInsight', 'Run a calculation to see data-driven chart insights for this view.');
+        setInsight('chartScatterInsight', [], 'Run a calculation to see what the comparison chart means for this session.');
         return;
       }
 
-      const modelRows = summarizeModelErrors(panels);
-      const best = modelRows.length ? modelRows[0] : null;
-      const worst = modelRows.length ? modelRows[modelRows.length - 1] : null;
+      const oracleValues = panels.map(p => p.oracle && p.oracle.governing_LR_kpa).filter(v => Number.isFinite(v));
+      const strategies = getStrategySummaries(panels);
+      const best = strategies[0] || null;
 
       if (chartType === 'algo_comparison') {
-        let worstPanelId = null;
-        let worstGap = -1;
-        for (const p of panels) {
-          const oracle = p.oracle && p.oracle.governing_LR_kpa;
-          if (!Number.isFinite(oracle) || !p.ml_by_strategy) continue;
-          for (const sid of Object.keys(p.ml_by_strategy)) {
-            const pred = p.ml_by_strategy[sid].predicted_governing_LR_kpa;
-            if (!Number.isFinite(pred)) continue;
-            const gap = Math.abs(pred - oracle);
-            if (gap > worstGap) {
-              worstGap = gap;
-              worstPanelId = p.id;
-            }
+        const highestPanel = panels.reduce((bestPanel, panel) => {
+          if (!bestPanel) return panel;
+          return panel.oracle.governing_LR_kpa > bestPanel.oracle.governing_LR_kpa ? panel : bestPanel;
+        }, null);
+
+        let largestGap = null;
+        for (const panel of panels) {
+          for (const summary of strategies) {
+            const ml = panel.ml_by_strategy && panel.ml_by_strategy[summary.sid] && panel.ml_by_strategy[summary.sid].predicted_governing_LR_kpa;
+            const oracle = panel.oracle && panel.oracle.governing_LR_kpa;
+            if (!Number.isFinite(ml) || !Number.isFinite(oracle)) continue;
+            const gap = Math.abs(ml - oracle);
+            if (!largestGap || gap > largestGap.gap) largestGap = { panelId: panel.id, label: summary.label, gap };
           }
         }
-        const html = `
-          <strong>Insight:</strong> This view compares oracle vs each ML method panel-by-panel.
-          <ul class="list-disc ml-5 mt-1 space-y-0.5">
-            <li>Panels shown: <strong>${panels.length}</strong>.</li>
-            <li>${best ? `Most consistent method this session: <strong>${best.label}</strong> (MAE ${fmt(best.mae)} kPa).` : 'No ML strategy values available in this session.'}</li>
-            <li>${worst ? `Largest average deviation: <strong>${worst.label}</strong> (MAE ${fmt(worst.mae)} kPa).` : 'Average deviation could not be computed.'}</li>
-            <li>${worstPanelId ? `Biggest single mismatch appears at panel <strong>${worstPanelId}</strong> (|error| ${fmt(worstGap)} kPa).` : 'No panel-level mismatch detected.'}</li>
-          </ul>
-        `;
-        setInsightHtml('scatterInsight', html);
+
+        setInsight('chartScatterInsight', [
+          'This grouped bar chart compares each panel directly: the oracle bar is the ASTM E1300 reference, and each colored bar shows one ML algorithm for the same panel.',
+          `In this session, oracle load resistance ranges from ${fmt(Math.min(...oracleValues), 3)} to ${fmt(Math.max(...oracleValues), 3)} kPa. The highest oracle value is on panel ${highestPanel ? highestPanel.id : 'n/a'}.`,
+          best ? `${best.label} is the closest overall match in this run, with an average absolute gap of ${fmt(best.mae, 3)} kPa from the oracle.` : 'No ML strategy output is available yet for comparison.',
+          largestGap ? `The biggest visible disagreement is on panel ${largestGap.panelId}, where ${largestGap.label} differs from the oracle by ${fmt(largestGap.gap, 3)} kPa.` : ''
+        ], 'Run a calculation to see what the comparison chart means for this session.');
         return;
       }
 
-      let xField = p => p.wind.design_load_kpa;
-      let xName = 'design pressure';
-      let xUnit = 'kPa';
+      let xValues = [];
+      let axisTopic = 'x-axis';
       if (chartType === 'elevation_vs_lr') {
-        xField = p => p.elevation_m || 0;
-        xName = 'panel elevation';
-        xUnit = 'm';
+        xValues = panels.map(p => p.elevation_m || 0);
+        axisTopic = 'elevation';
       } else if (chartType === 'aspect_vs_lr') {
-        xField = p => p.long_m / Math.max(p.short_m, 0.01);
-        xName = 'aspect ratio';
-        xUnit = '';
+        xValues = panels.map(p => p.long_m / Math.max(p.short_m, 0.01));
+        axisTopic = 'aspect ratio';
+      } else {
+        xValues = panels.map(p => p.wind && p.wind.design_load_kpa);
+        axisTopic = 'design pressure';
       }
 
-      const oraclePts = panels
-        .map(p => ({ x: xField(p), y: p.oracle && p.oracle.governing_LR_kpa }))
-        .filter(p => Number.isFinite(p.x) && Number.isFinite(p.y));
-      const corr = correlationXY(oraclePts);
-      const xs = oraclePts.map(p => p.x);
-      const xMin = xs.length ? Math.min(...xs) : null;
-      const xMax = xs.length ? Math.max(...xs) : null;
-      let trendText = 'trend not clear yet';
-      if (corr != null) {
-        if (corr > 0.55) trendText = `clear positive trend (r=${fmt(corr, 2)})`;
-        else if (corr < -0.55) trendText = `clear negative trend (r=${fmt(corr, 2)})`;
-        else if (Math.abs(corr) >= 0.25) trendText = `moderate trend (r=${fmt(corr, 2)})`;
-        else trendText = `weak trend (r=${fmt(corr, 2)})`;
-      }
+      const corr = correlation(xValues, oracleValues);
+      const minX = Math.min(...xValues.filter(v => Number.isFinite(v)));
+      const maxX = Math.max(...xValues.filter(v => Number.isFinite(v)));
+      const viewLabel = chartType === 'elevation_vs_lr' ? 'elevation'
+        : chartType === 'aspect_vs_lr' ? 'aspect ratio'
+        : 'design pressure';
 
-      const html = `
-        <strong>Insight:</strong> This view shows how oracle and ML load resistance change with ${xName}.
-        <ul class="list-disc ml-5 mt-1 space-y-0.5">
-          <li>${xMin != null && xMax != null ? `${xName.charAt(0).toUpperCase() + xName.slice(1)} range in this session: <strong>${fmt(xMin)}</strong> to <strong>${fmt(xMax)}</strong>${xUnit ? ' ' + xUnit : ''}.` : `No valid ${xName} values available.`}</li>
-          <li>Oracle pattern suggests a <strong>${trendText}</strong> across plotted panels.</li>
-          <li>${best ? `Closest overall ML method to oracle: <strong>${best.label}</strong> (MAE ${fmt(best.mae)} kPa across ${best.n} panels).` : 'ML-to-oracle error summary is unavailable for this session.'}</li>
-          <li>${worst ? `Use caution with <strong>${worst.label}</strong>; it shows the largest average gap (MAE ${fmt(worst.mae)} kPa).` : 'No higher-gap algorithm identified.'}</li>
-        </ul>
-      `;
-      setInsightHtml('scatterInsight', html);
+      setInsight('chartScatterInsight', [
+        `This scatter chart checks whether the ML predictions follow the oracle as ${viewLabel} changes across the panels in this session.`,
+        `${trendText(corr, axisTopic)} The plotted ${viewLabel} values span from ${fmt(minX, 3)} to ${fmt(maxX, 3)}, while oracle load resistance spans from ${fmt(Math.min(...oracleValues), 3)} to ${fmt(Math.max(...oracleValues), 3)} kPa.`,
+        best ? `${best.label} is currently the closest overall ML match, with an average absolute gap of ${fmt(best.mae, 3)} kPa. Points far away from the oracle series mark where the surrogate model is less reliable for this session.` : 'ML predictions are not available yet, so only the oracle trend can be interpreted.'
+      ], 'Run a calculation to see what the comparison chart means for this session.');
     }
 
-    function updateImportanceInsight(feat) {
+    function updateFeatureInsight(feat) {
       if (!feat || !Object.keys(feat).length) {
-        setInsightHtml('impInsight', 'Feature insights appear after calculation.');
+        setInsight('chartImpInsight', [], 'Run a calculation to see feature-importance guidance for the current model bundle.');
         return;
       }
-      const rows = Object.entries(feat)
-        .map(([k, v]) => ({ key: k, label: DISPLAY_FEATURE[k] || k, value: Number(v) }))
-        .filter(r => Number.isFinite(r.value))
-        .sort((a, b) => b.value - a.value);
-      if (!rows.length) {
-        setInsightHtml('impInsight', 'Feature insights could not be generated for this run.');
+
+      const ranked = Object.entries(feat)
+        .filter(([, value]) => Number.isFinite(value))
+        .sort((a, b) => b[1] - a[1]);
+      if (!ranked.length) {
+        setInsight('chartImpInsight', [], 'Run a calculation to see feature-importance guidance for the current model bundle.');
         return;
       }
-      const top = rows[0];
-      const second = rows[1];
-      const top3Sum = rows.slice(0, 3).reduce((acc, r) => acc + r.value, 0);
-      const dominant = top.value >= 0.35 ? 'dominant' : (top.value >= 0.22 ? 'strong' : 'distributed');
-      const html = `
-        <strong>Insight:</strong> This chart is a teaching-oriented relative weighting from training data spread.
-        <ul class="list-disc ml-5 mt-1 space-y-0.5">
-          <li>Top feature: <strong>${top.label}</strong> (${fmt(top.value, 3)} relative weight), indicating a ${dominant} influence in the training distribution.</li>
-          <li>${second ? `Second feature: <strong>${second.label}</strong> (${fmt(second.value, 3)}).` : 'Only one feature weight is available.'}</li>
-          <li>Top 3 features together contribute about <strong>${fmt(top3Sum * 100, 1)}%</strong> of total weight.</li>
-          <li>Use this as global model context for the session; it is not a per-panel causal explanation.</li>
-        </ul>
-      `;
-      setInsightHtml('impInsight', html);
+
+      const top = ranked[0];
+      const second = ranked[1] || null;
+      const topThree = ranked.slice(0, 3);
+      const topThreeShare = topThree.reduce((sum, [, value]) => sum + value, 0);
+
+      setInsight('chartImpInsight', [
+        `This chart is a teaching aid: it summarizes which inputs carry the strongest relative weight in the trained model bundle, not a per-panel explanation for one prediction.`,
+        `${DISPLAY_FEATURE[top[0]] || top[0]} is the strongest feature at about ${fmt(top[1] * 100, 1)}% of the total weight${second ? `, followed by ${DISPLAY_FEATURE[second[0]] || second[0]} at ${fmt(second[1] * 100, 1)}%` : ''}.`,
+        `The top three features (${topThree.map(([key]) => DISPLAY_FEATURE[key] || key).join(', ')}) account for about ${fmt(topThreeShare * 100, 1)}% of the total weight, so the model is mainly responding to those inputs when it compares new panels to the training data.`,
+        'Because this is based on the training distribution, it stays mostly stable from session to session unless the model is retrained.'
+      ], 'Run a calculation to see feature-importance guidance for the current model bundle.');
     }
 
     function drawScatter(panels, chartType) {
@@ -968,6 +964,7 @@
 
       if (chartType === 'algo_comparison') {
         drawAlgoComparison(panels);
+        updateScatterInsight(panels, chartType);
         return;
       }
 
@@ -1019,7 +1016,10 @@
     function drawAlgoComparison(panels) {
       const ctx = document.getElementById('chartScatter');
       if (chartScatter) chartScatter.destroy();
-      if (!panels || !panels.length) return;
+      if (!panels || !panels.length) {
+        updateScatterInsight([], 'algo_comparison');
+        return;
+      }
 
       const labels = panels.map(p => p.id);
       const datasets = [{
@@ -1058,14 +1058,13 @@
           }
         }
       });
-      updateScatterInsight(panels, 'algo_comparison');
     }
 
     function drawImp(feat) {
       const ctx = document.getElementById('chartImp');
       if (chartImp) chartImp.destroy();
       if (!feat) {
-        updateImportanceInsight(null);
+        updateFeatureInsight(null);
         return;
       }
       const labels = Object.keys(feat).map(k => DISPLAY_FEATURE[k] || k);
@@ -1087,7 +1086,7 @@
           }
         }
       });
-      updateImportanceInsight(feat);
+      updateFeatureInsight(feat);
     }
 
     // --- Table ---
@@ -1351,6 +1350,8 @@
     fillRoughness();
     fillRegions();
     redrawWindFromForm();
+    updateScatterInsight([], document.getElementById('chartTypeSelect').value);
+    updateFeatureInsight(null);
 
     (async () => {
       const sid = document.getElementById('sessionId').value.trim();
